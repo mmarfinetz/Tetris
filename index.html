@@ -401,7 +401,8 @@
         const MARKOV_DEFAULTS = {
             stateHistorySize: 1000,    // How many state transitions to remember
             minObservations: 3,        // Minimum observations before using chain (lowered since learning from expert)
-            humanMimicRate: 0.85,      // How often to follow learned human patterns vs exploring
+            humanMimicRate: 0.3,       // How often to follow learned human patterns vs exploring (lowered since no initial data)
+            explorationRate: 0.1,      // Chance to make exploratory move (reduced since heuristics are now good)
             stateSimplification: 'features', // 'features' or 'positions'
             learnFromHuman: true       // Whether to learn from human player
         };
@@ -625,7 +626,7 @@
             };
         }
 
-        function simplifyBoardToState(board) {
+        function simplifyBoardToState(board, pieceType = null, nextPieceType = null) {
             // Convert board to a simplified state representation
             const features = computeBoardFeatures(board);
             
@@ -633,9 +634,12 @@
             const heightCategory = Math.floor(features.aggregateHeight / 20); // 0-19, 20-39, etc.
             const holeCategory = Math.min(features.holes, 10); // 0-10+ holes
             const bumpCategory = Math.floor(features.bumpiness / 5); // 0-4, 5-9, etc.
-            const lineCategory = features.completeLines; // 0, 1, 2, 3, 4
+            const lineCategory = features.completeLines; // 0, 1, 2, 3, 4 (usually 0 before drop)
             
-            return `h${heightCategory}_o${holeCategory}_b${bumpCategory}_l${lineCategory}`;
+            // Include current piece type in the key if provided to disambiguate actions across pieces
+            const piecePrefix = pieceType ? `p${pieceType}_` : '';
+            const nextPrefix = nextPieceType ? `n${nextPieceType}_` : '';
+            return `${piecePrefix}${nextPrefix}h${heightCategory}_o${holeCategory}_b${bumpCategory}_l${lineCategory}`;
         }
 
         function actionToString(targetX, rotationIndex) {
@@ -666,23 +670,34 @@
             saveMarkovChains(chains);
         }
 
-        function selectMarkovAction(chains, currentState, possibleActions, useHumanPatterns = true) {
-            // Use human-learned patterns primarily
-            if (useHumanPatterns && Math.random() < MARKOV_DEFAULTS.humanMimicRate) {
-                // Try to use human-learned behavior
+        function selectMarkovAction(chains, currentState, possibleActions, useHumanPatterns = true, playerId = null, board = null, pieceType = null) {
+            // Validate inputs
+            if (!board || !pieceType) {
+                console.warn(`Markov AI: Missing critical data - board: ${!!board}, pieceType: ${pieceType}`);
+            }
+            
+            // Exploration: sometimes make random moves to discover new patterns
+            if (Math.random() < MARKOV_DEFAULTS.explorationRate) {
+                return selectActionWithBasicHeuristics(possibleActions, board, pieceType);
+            }
+            
+            // Use human-learned patterns if available and we want to mimic them
+            if (useHumanPatterns && chains.humanPatterns && chains.humanPatterns.size > 0 && 
+                Math.random() < MARKOV_DEFAULTS.humanMimicRate) {
                 const humanAction = selectHumanLearnedAction(chains, currentState, possibleActions);
                 if (humanAction) return humanAction;
             }
             
             // Check if we have data for this state
             if (!chains.stateTransitions.has(currentState)) {
-                // If no data, try similar states or use best general patterns
-                return selectFromSimilarStates(chains, currentState, possibleActions);
+                // If no data, try similar states or use basic heuristics
+                return selectFromSimilarStates(chains, currentState, possibleActions, board, pieceType);
             }
             
             const actionMap = chains.stateTransitions.get(currentState);
             let bestAction = null;
             let bestScore = -Infinity;
+            let foundLearnedAction = false;
             
             // Score each possible action based on historical performance
             for (const action of possibleActions) {
@@ -695,12 +710,25 @@
                     if (score > bestScore) {
                         bestScore = score;
                         bestAction = action;
+                        foundLearnedAction = true;
                     }
                 }
             }
             
-            // If no good historical data, try to use general human patterns
-            return bestAction || selectFromSimilarStates(chains, currentState, possibleActions);
+            // Check if we found a learned action and should celebrate
+            if (foundLearnedAction && bestAction && playerId !== null) {
+                const player = game && game.players ? game.players.find(p => p.id === playerId) : null;
+                if (player && !player.markovInitialized) {
+                    const totalStates = chains.stateTransitions.size;
+                    const totalObservations = chains.totalObservations;
+                    console.log(`🧠 CPU ${playerId} (MC): Markov initialized, it's on motherfucker! 🚀`);
+                    console.log(`   📊 Stats: ${totalStates} states learned, ${totalObservations} total observations`);
+                    player.markovInitialized = true;
+                }
+            }
+            
+            // If no good historical data, use smart fallback
+            return bestAction || selectFromSimilarStates(chains, currentState, possibleActions, board, pieceType);
         }
 
         function selectHumanLearnedAction(chains, currentState, possibleActions) {
@@ -723,7 +751,7 @@
             return null;
         }
 
-        function selectFromSimilarStates(chains, currentState, possibleActions) {
+        function selectFromSimilarStates(chains, currentState, possibleActions, board = null, pieceType = null) {
             // Find similar states and use their best actions
             const stateFeatures = currentState.split('_');
             let bestAction = null;
@@ -747,16 +775,121 @@
                 }
             }
             
-            // Last resort: pick first available action
+            // Better fallback: use smart heuristics with board evaluation
             if (!bestAction && possibleActions.length > 0) {
-                bestAction = possibleActions[0];
+                bestAction = selectActionWithBasicHeuristics(possibleActions, board, pieceType);
             }
             return bestAction;
         }
 
+        function selectActionWithBasicHeuristics(possibleActions, board = null, pieceType = null) {
+            // Use REAL Tetris strategy when no learned data exists
+            if (!board || !pieceType || possibleActions.length === 0) {
+                console.error('CRITICAL: Markov Chain AI missing data!', {
+                    hasBoard: !!board,
+                    pieceType: pieceType,
+                    actionsCount: possibleActions.length,
+                    actions: possibleActions.slice(0, 5)
+                });
+                // Better fallback: prefer center positions and minimal rotations
+                const centerActions = possibleActions.filter(a => {
+                    const [x, r] = a.split('_').map(Number);
+                    return x >= 3 && x <= 6 && r <= 1;
+                });
+                if (centerActions.length > 0) {
+                    return centerActions[0];
+                }
+                return possibleActions[0] || '4_0'; // Default to center with no rotation
+            }
+            
+            let bestAction = possibleActions[0];
+            let bestScore = -Infinity;
+            
+            // Debug first evaluation
+            let evaluationCount = 0;
+            
+            for (const action of possibleActions) {
+                const [xStr, rotStr] = action.split('_');
+                const x = parseInt(xStr);
+                const rotationIndex = parseInt(rotStr);
+                
+                // Simulate the move and evaluate the resulting board
+                const testShape = getRotatedShape(pieceType, rotationIndex);
+                const simulation = simulateLock(board, pieceType, testShape, x);
+                
+                if (!simulation) {
+                    continue; // Invalid move
+                }
+                
+                // Use the EXACT evaluation function from genetic algorithm!
+                const features = computeBoardFeatures(simulation.board);
+                
+                // CRITICAL FIX: Use lines cleared from simulation, not from the cleared board!
+                const linesCleared = simulation.cleared || 0;
+                
+                // Use the actual DEFAULT_WEIGHTS that work for GA
+                let score = 0;
+                score += features.aggregateHeight * -0.510066;  // Height penalty (negative is bad)
+                score += linesCleared * 0.760666;               // Lines cleared (positive is good) - USE SIMULATION RESULT!
+                score += features.holes * -0.35663;             // Holes penalty (negative is bad)
+                score += features.bumpiness * -0.184483;        // Bumpiness penalty (negative is bad)
+                
+                // Scale up to make differences more pronounced
+                score *= 100;
+                
+                // Bonus for clearing multiple lines (same as GA)
+                if (linesCleared >= 2) {
+                    score += linesCleared * 50;
+                }
+                
+                // Small randomization to avoid identical play
+                score += (Math.random() - 0.5) * 2;
+                
+                // Debug logging for first few evaluations
+                if (evaluationCount < 3) {
+                    console.log(`MC Heuristic eval #${evaluationCount}: action=${action}, score=${score.toFixed(2)}, height=${features.aggregateHeight}, holes=${features.holes}, linesCleared=${linesCleared}`);
+                }
+                evaluationCount++;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestAction = action;
+                }
+            }
+            
+            return bestAction;
+        }
+
+        function getRotatedShape(pieceType, rotationIndex) {
+            let shape = PIECES[pieceType];
+            for (let i = 0; i < rotationIndex; i++) {
+                shape = rotateShape(shape);
+            }
+            return shape;
+        }
+        
+        function countIsolatedHoles(board) {
+            // Count holes that are completely surrounded (hard to clear)
+            let isolatedHoles = 0;
+            for (let y = 1; y < BOARD_HEIGHT - 1; y++) {
+                for (let x = 1; x < BOARD_WIDTH - 1; x++) {
+                    if (!board[y][x] && 
+                        board[y-1][x] && board[y+1][x] && 
+                        board[y][x-1] && board[y][x+1]) {
+                        isolatedHoles++;
+                    }
+                }
+            }
+            return isolatedHoles;
+        }
+
         function calculateStateSimilarity(state1, state2) {
-            const features1 = state1.split('_').map(f => parseInt(f.slice(1)));
-            const features2 = state2.split('_').map(f => parseInt(f.slice(1)));
+            // Ignore piece token when comparing similarity; only compare numeric feature buckets
+            const toks1 = state1.split('_').filter(t => !t.startsWith('p'));
+            const toks2 = state2.split('_').filter(t => !t.startsWith('p'));
+
+            const features1 = toks1.map(f => parseInt(f.slice(1)));
+            const features2 = toks2.map(f => parseInt(f.slice(1)));
             
             if (features1.length !== features2.length) return 0;
             
@@ -804,6 +937,57 @@
             }
             
             return possibleActions;
+        }
+
+        function parseActionString(action) {
+            const [xStr, rStr] = action.split('_');
+            return { x: parseInt(xStr), rotationIndex: parseInt(rStr) };
+        }
+
+        function evaluatePlacement(board, pieceType, action, weights) {
+            const { x, rotationIndex } = parseActionString(action);
+            const shape = getRotatedShape(pieceType, rotationIndex);
+            const sim = simulateLock(board, pieceType, shape, x);
+            if (!sim) return null;
+            const f = computeBoardFeatures(sim.board);
+            const score = (
+                weights.completeLines * (sim.cleared || 0) +
+                weights.aggregateHeight * f.aggregateHeight +
+                weights.holes * f.holes +
+                weights.bumpiness * f.bumpiness
+            );
+            return { board: sim.board, cleared: sim.cleared || 0, score };
+        }
+
+        function selectActionTwoPly(board, pieceType, nextPieceType, weights, possibleActions) {
+            if (!possibleActions || possibleActions.length === 0) return null;
+            const gamma = 0.9;
+            let bestAction = null;
+            let bestScore = -Infinity;
+            for (const action of possibleActions) {
+                const res1 = evaluatePlacement(board, pieceType, action, weights);
+                if (!res1) continue;
+                let secondBest = 0;
+                if (nextPieceType) {
+                    const nextActions = generateMarkovPossibleActions(res1.board, nextPieceType);
+                    if (nextActions.length > 0) {
+                        let bestSecond = -Infinity;
+                        for (const a2 of nextActions) {
+                            const res2 = evaluatePlacement(res1.board, nextPieceType, a2, weights);
+                            if (res2 && res2.score > bestSecond) bestSecond = res2.score;
+                        }
+                        secondBest = bestSecond;
+                    } else {
+                        secondBest = 0;
+                    }
+                }
+                const total = res1.score + gamma * secondBest;
+                if (total > bestScore) {
+                    bestScore = total;
+                    bestAction = action;
+                }
+            }
+            return bestAction;
         }
 
         function simulateLock(board, pieceType, shape, startX) {
@@ -938,6 +1122,9 @@
                 this.lastMarkovState = null;
                 this.lastMarkovAction = null;
                 this.lastMarkovScore = 0;
+                this.lastMarkovLines = 0;
+                this.lastFeaturesBefore = null;  // features snapshot before last chosen action
+                this.markovInitialized = false; // Track when Markov fully takes over
                 // Human tracking for Markov learning
                 this.humanMoveHistory = [];
                 this.lastHumanState = null;
@@ -967,9 +1154,9 @@
                 // Invalidate AI plan on new piece
                 this.aiPlan = null;
                 
-                // Track new piece for human learning
+                // Track new piece for human learning (condition state on current piece)
                 if (!this.isAI && MARKOV_DEFAULTS.learnFromHuman) {
-                    this.lastHumanState = simplifyBoardToState(this.board);
+                    this.lastHumanState = simplifyBoardToState(this.board, this.currentPiece.type, this.nextPiece);
                 }
             }
 
@@ -1367,7 +1554,13 @@
                 if (!this.aiPlan || !this.currentPiece) return;
                 const now = Date.now();
                 if (!this._lastAIStep) this._lastAIStep = 0;
-                const stepDelay = Math.max(60, 260 - this.level * 20); // faster with level
+                
+                // Consistent AI speed for all AI types - no level-based acceleration for fairness
+                let stepDelay = 120; // Fixed delay for all AIs
+                if (this.aiType === 'markov') {
+                    stepDelay = 100; // Slightly faster for Markov to compensate for weaker play
+                }
+                
                 if (now - this._lastAIStep < stepDelay) return;
                 this._lastAIStep = now;
 
@@ -1440,7 +1633,16 @@
                     for (let x = -2; x <= BOARD_WIDTH - 1; x++) { // generous scan window with bounds fix inside simulate
                         const sim = simulateLock(board, type, rot.shape, x);
                         if (!sim) continue;
-                        const score = evaluateBoardHeuristicWith(sim.board, weights);
+                        
+                        // Fix: Include lines cleared in the evaluation
+                        const features = computeBoardFeatures(sim.board);
+                        const score = (
+                            weights.completeLines * (sim.cleared || 0) +  // Use actual lines cleared!
+                            weights.aggregateHeight * features.aggregateHeight +
+                            weights.holes * features.holes +
+                            weights.bumpiness * features.bumpiness
+                        );
+                        
                         if (score > bestScore) {
                             bestScore = score;
                             best = { targetX: clampX(x, rot.shape), rotationIndex: rot.rotationIndex };
@@ -1468,6 +1670,39 @@
                 // Record final placement decision by human player
                 if (!this.currentPiece || !this.lastHumanState) return;
                 
+                // Check if this placement will result in line clears
+                // Simulate the piece lock to see if lines will be cleared
+                const testBoard = cloneBoard(this.board);
+                const piece = this.currentPiece;
+                
+                // Place the piece on the test board
+                for (let y = 0; y < piece.shape.length; y++) {
+                    for (let x = 0; x < piece.shape[y].length; x++) {
+                        if (piece.shape[y][x]) {
+                            const boardY = piece.y + y;
+                            const boardX = piece.x + x;
+                            if (boardY >= 0 && boardY < BOARD_HEIGHT && boardX >= 0 && boardX < BOARD_WIDTH) {
+                                testBoard[boardY][boardX] = piece.type;
+                            }
+                        }
+                    }
+                }
+                
+                // Count how many lines will be cleared
+                let linesWillClear = 0;
+                for (let y = 0; y < BOARD_HEIGHT; y++) {
+                    if (testBoard[y].every(cell => cell !== null)) {
+                        linesWillClear++;
+                    }
+                }
+                
+                // ONLY learn from moves that clear lines
+                if (linesWillClear === 0) {
+                    // Don't learn from non-line-clearing moves
+                    this.humanMoveHistory = [];
+                    return;
+                }
+                
                 // Get shared Markov chains instance
                 const globalChains = game ? game.markovChains : loadMarkovChains();
                 if (!globalChains) return;
@@ -1491,7 +1726,7 @@
                 }
                 
                 const action = actionToString(finalX, rotationIndex);
-                const currentState = simplifyBoardToState(this.board);
+                const currentState = simplifyBoardToState(this.board, this.currentPiece.type, this.nextPiece);
                 
                 // Record in human patterns
                 if (!globalChains.humanPatterns) {
@@ -1506,8 +1741,14 @@
                 const count = stateActions.get(action) || 0;
                 stateActions.set(action, count + 1);
                 
-                // Also update regular transitions with human data
-                const reward = this.lines * 200 + 100; // Assume human moves are good
+                // Update transitions with weighted reward based on lines cleared
+                // More lines = better reward to learn from
+                const baseReward = linesWillClear * 1000;  // 1000 per line cleared
+                const bonusForMultiLine = linesWillClear >= 2 ? linesWillClear * 500 : 0;  // Extra bonus for multi-line clears
+                const reward = baseReward + bonusForMultiLine;
+                
+                console.log(`📚 Learning from human: ${linesWillClear} line(s) cleared, reward: ${reward}`);
+                
                 updateMarkovChain(
                     globalChains,
                     this.lastHumanState,
@@ -1535,7 +1776,7 @@
                     this.markovChains = game ? game.markovChains : loadMarkovChains();
                 }
                 
-                const currentState = simplifyBoardToState(this.board);
+                const currentState = simplifyBoardToState(this.board, this.currentPiece.type, this.nextPiece);
                 const pieceType = this.currentPiece.type;
                 const possibleActions = generateMarkovPossibleActions(this.board, pieceType);
                 
@@ -1546,18 +1787,36 @@
                 
                 // Update chain with previous move if we have one
                 if (this.lastMarkovState && this.lastMarkovAction) {
-                    const reward = this.score - this.lastMarkovScore + (this.lines * 150);
+                    // Reward previous action using feature deltas (after previous lock vs before it)
+                    const featuresAfter = computeBoardFeatures(this.board); // board after last lock
+                    const featuresBefore = this.lastFeaturesBefore;          // snapshot taken before that lock
+                    const fb = featuresBefore || featuresAfter;
+
+                    // Improvements are positive when after < before for cost features
+                    const deltaHeight = fb.aggregateHeight - featuresAfter.aggregateHeight; // positive is good
+                    const deltaHoles = fb.holes - featuresAfter.holes;                      // positive is good
+                    const deltaBump = fb.bumpiness - featuresAfter.bumpiness;               // positive is good
+                    const linesCleared = this.lines - (this.lastMarkovLines || 0);
+
+                    let reward = 0;
+                    reward += linesCleared * 200;  // emphasize clears
+                    reward += deltaHeight * 2;
+                    reward += deltaBump * 1.5;
+                    reward += deltaHoles * 50;
+                    reward += 2; // small living bonus
+
                     updateMarkovChain(
-                        this.markovChains, 
-                        this.lastMarkovState, 
-                        this.lastMarkovAction, 
-                        currentState, 
+                        this.markovChains,
+                        this.lastMarkovState,
+                        this.lastMarkovAction,
+                        currentState,
                         reward
                     );
                 }
                 
-                // Select action using Markov chain (prioritizing human-learned patterns)
-                const selectedAction = selectMarkovAction(this.markovChains, currentState, possibleActions, true);
+                // Two-ply lookahead using known next piece; fallback to Markov prior if needed
+                const selectedAction2Ply = selectActionTwoPly(this.board, pieceType, this.nextPiece, DEFAULT_WEIGHTS, possibleActions);
+                const selectedAction = selectedAction2Ply || selectMarkovAction(this.markovChains, currentState, possibleActions, true, this.id, this.board, pieceType);
                 const [targetXStr, rotationIndexStr] = selectedAction.split('_');
                 const targetX = parseInt(targetXStr);
                 const rotationIndex = parseInt(rotationIndexStr);
@@ -1566,6 +1825,9 @@
                 this.lastMarkovState = currentState;
                 this.lastMarkovAction = selectedAction;
                 this.lastMarkovScore = this.score;
+                this.lastMarkovLines = this.lines;
+                // Snapshot features before executing the planned placement (used to compute deltas next tick)
+                this.lastFeaturesBefore = computeBoardFeatures(this.board);
                 
                 return { targetX, rotationIndex };
             }
