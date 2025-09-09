@@ -42,7 +42,7 @@
 
         .playerSection.main {
             order: 2;
-            transform: scale(1.1);
+            /* All players same size */
         }
 
         .playerHeader {
@@ -63,16 +63,13 @@
             display: inline-block;
         }
 
-        .miniBoard {
-            transform: scale(0.5);
-            transform-origin: top left;
-            width: 150px;
-            height: 300px;
-        }
+        /* All players get same size canvases now */
 
         canvas {
             display: block;
             image-rendering: pixelated;
+            width: 200px;
+            height: 400px;
         }
 
         .stats {
@@ -306,8 +303,10 @@
                 transform: scale(1);
             }
             
-            .miniBoard {
-                display: none;
+            canvas {
+                width: 100%;
+                max-width: 200px;
+                height: auto;
             }
             
             .controls {
@@ -389,7 +388,7 @@
             FREEZE: { name: 'Freeze', icon: '❄️', type: 'defensive' },
             STEAL: { name: 'Steal', icon: '🎯', type: 'special' },
             MIRROR: { name: 'Mirror', icon: '🪞', type: 'special' },
-            ELIMINATE: { name: 'Eliminate', icon: '💥', type: 'special' }
+            ELIMINATE: { name: 'Stack', icon: '📚', type: 'offensive' }
         };
         // Only these power-ups have concrete effects implemented below
         const IMPLEMENTED_POWERUPS = ['GARBAGE','SPEED','BLIND','SHIELD','CLEAR','SLOW','ELIMINATE'];
@@ -881,6 +880,10 @@
                 this.lastMarkovState = null;
                 this.lastMarkovAction = null;
                 this.lastMarkovScore = 0;
+                // Human tracking for Markov learning
+                this.humanMoveHistory = [];
+                this.lastHumanState = null;
+                this.pieceCount = 0;
             }
 
             init(canvas) {
@@ -1137,9 +1140,19 @@
                     case 'ELIMINATE':
                         game.players.forEach(p => {
                             if (p.id !== this.id && !p.gameOver) {
-                                p.board.pop();
-                                p.board.unshift(Array(BOARD_WIDTH).fill(null));
-                                this.showAttackEffect(p, 'ELIMINATED!');
+                                // Add 3 rows of random garbage to target
+                                for (let i = 0; i < 3; i++) {
+                                    const stackLine = Array(BOARD_WIDTH).fill('garbage');
+                                    // Create 2-3 random holes per line for fairness
+                                    const numHoles = Math.floor(Math.random() * 2) + 2; // 2-3 holes
+                                    for (let h = 0; h < numHoles; h++) {
+                                        const hole = Math.floor(Math.random() * BOARD_WIDTH);
+                                        stackLine[hole] = null;
+                                    }
+                                    p.board.push(stackLine);
+                                    p.board.shift();
+                                }
+                                this.showAttackEffect(p, 'STACKED!');
                             }
                         });
                         break;
@@ -1557,7 +1570,8 @@
                     const canvas = document.createElement('canvas');
                     canvas.width = BOARD_WIDTH * BLOCK_SIZE;
                     canvas.height = BOARD_HEIGHT * BLOCK_SIZE;
-                    canvas.className = isMain ? '' : 'miniBoard';
+                    // All players get same size canvas
+                    canvas.className = '';
                     
                     const boardDiv = document.createElement('div');
                     boardDiv.className = 'gameBoard';
