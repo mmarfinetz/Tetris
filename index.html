@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Tetris Battle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #gameContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .playerSection {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .playerSection.main {
+            order: 2;
+            transform: scale(1.1);
+        }
+
+        .playerHeader {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .gameBoard {
+            position: relative;
+            border: 3px solid #fff;
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.9);
+            display: inline-block;
+        }
+
+        .miniBoard {
+            transform: scale(0.5);
+            transform-origin: top left;
+            width: 150px;
+            height: 300px;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .stats {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .stats div {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .powerUpsContainer {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .powerUp {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .powerUp:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .powerUp.active {
+            animation: pulse 1s infinite;
+        }
+
+        .powerUp.cooldown {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .powerUp .icon {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+
+        .powerUp .name {
+            font-size: 9px;
+            text-align: center;
+        }
+
+        .powerUp .cooldownTimer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            font-weight: bold;
+            color: #ff0;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        #startMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menuTitle {
+            font-size: 48px;
+            margin-bottom: 30px;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .menuButtons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .menuButton {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .menuButton:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        .controls h3 {
+            margin-bottom: 10px;
+        }
+
+        .controlsGrid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .effect {
+            position: absolute;
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        .lineCleared {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            height: 20px;
+            width: 100%;
+            animation: lineClear 0.5s ease-out;
+        }
+
+        @keyframes lineClear {
+            0% { 
+                transform: scaleX(0);
+                opacity: 1;
+            }
+            100% { 
+                transform: scaleX(1);
+                opacity: 0;
+            }
+        }
+
+        .attackIndicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 30px;
+            color: #ff0;
+            font-weight: bold;
+            animation: attackPulse 1s ease-out;
+            pointer-events: none;
+            z-index: 600;
+        }
+
+        @keyframes attackPulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 1;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.5);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+
+        .targetSelector {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .targetButton {
+            padding: 5px 10px;
+            margin: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid #fff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .targetButton.selected {
+            background: rgba(255, 100, 100, 0.5);
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 768px) {
+            #gameContainer {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .playerSection.main {
+                transform: scale(1);
+            }
+            
+            .miniBoard {
+                display: none;
+            }
+            
+            .controls {
+                width: 90%;
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="startMenu">
+        <h1 class="menuTitle">TETRIS BATTLE</h1>
+        <div class="menuButtons">
+            <button class="menuButton" onclick="startGame(2)">2 Players</button>
+            <button class="menuButton" onclick="startGame(3)">3 Players</button>
+            <button class="menuButton" onclick="startGame(4)">4 Players</button>
+        </div>
+    </div>
+
+    <div id="gameContainer" style="display: none;">
+        <!-- Player sections will be generated dynamically -->
+    </div>
+
+    <div class="controls" style="display: none;">
+        <h3>Controls</h3>
+        <div class="controlsGrid">
+            <div>⬅️➡️ Move</div>
+            <div>⬇️ Soft Drop</div>
+            <div>⬆️ Rotate</div>
+            <div>Space: Hard Drop</div>
+            <div>1-5: Power-ups</div>
+            <div>Tab: Change Target</div>
+        </div>
+    </div>
+
+    <script>
+        // Game Constants
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const BLOCK_SIZE = 20;
+        const COLORS = {
+            I: '#00f0f0',
+            O: '#f0f000',
+            T: '#a000f0',
+            S: '#00f000',
+            Z: '#f00000',
+            J: '#0000f0',
+            L: '#f0a000',
+            EMPTY: '#000',
+            GHOST: 'rgba(255, 255, 255, 0.2)'
+        };
+
+        // Tetromino definitions
+        const PIECES = {
+            I: [[1,1,1,1]],
+            O: [[1,1],[1,1]],
+            T: [[0,1,0],[1,1,1]],
+            S: [[0,1,1],[1,1,0]],
+            Z: [[1,1,0],[0,1,1]],
+            J: [[1,0,0],[1,1,1]],
+            L: [[0,0,1],[1,1,1]]
+        };
+
+        // Power-up definitions
+        const POWERUPS = {
+            GARBAGE: { name: 'Garbage', icon: '🗑️', type: 'offensive' },
+            SPEED: { name: 'Speed', icon: '⚡', type: 'offensive' },
+            BLIND: { name: 'Blind', icon: '👁️', type: 'offensive' },
+            SCRAMBLE: { name: 'Scramble', icon: '🔀', type: 'offensive' },
+            GRAVITY: { name: 'Gravity', icon: '🔄', type: 'offensive' },
+            SHIELD: { name: 'Shield', icon: '🛡️', type: 'defensive' },
+            CLEAR: { name: 'Clear', icon: '💣', type: 'defensive' },
+            SLOW: { name: 'Slow', icon: '🐌', type: 'defensive' },
+            GHOST: { name: 'Ghost', icon: '👻', type: 'defensive' },
+            FREEZE: { name: 'Freeze', icon: '❄️', type: 'defensive' },
+            STEAL: { name: 'Steal', icon: '🎯', type: 'special' },
+            MIRROR: { name: 'Mirror', icon: '🪞', type: 'special' },
+            ELIMINATE: { name: 'Eliminate', icon: '💥', type: 'special' }
+        };
+        // Only these power-ups have concrete effects implemented below
+        const IMPLEMENTED_POWERUPS = ['GARBAGE','SPEED','BLIND','SHIELD','CLEAR','SLOW','ELIMINATE'];
+
+        // -------- Simple Learning AI (Heuristic + Evolution) --------
+        const AI_STORAGE_KEY = 'tetris_ai_weights_v2_population';
+        const DEFAULT_WEIGHTS = {
+            // Lower is better for these costs
+            aggregateHeight: -0.510066,
+            completeLines: 0.760666,
+            holes: -0.35663,
+            bumpiness: -0.184483
+        };
+
+        const GA_DEFAULTS = {
+            populationSize: 12,
+            tournamentSize: 3,
+            mutationRate: 0.15,
+            mutationStrength: 0.08,
+            crossoverRate: 0.7
+        };
+
+        function loadAIWeights() {
+            try {
+                const saved = localStorage.getItem(AI_STORAGE_KEY);
+                if (!saved) return { population: seedPopulation(), index: 0, history: [] };
+                const parsed = JSON.parse(saved);
+                if (!parsed.population) return { population: seedPopulation(), index: 0, history: [] };
+                return parsed;
+            } catch (_) {
+                return { population: seedPopulation(), index: 0, history: [] };
+            }
+        }
+
+        function saveAIWeights(state) {
+            try {
+                localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(state));
+            } catch (_) {}
+        }
+
+        function mutateWeights(base, strength = GA_DEFAULTS.mutationStrength) {
+            const mutated = { ...base };
+            Object.keys(mutated).forEach(k => {
+                if (Math.random() < GA_DEFAULTS.mutationRate) {
+                    const delta = (Math.random() * 2 - 1) * strength * Math.max(1, Math.abs(mutated[k]));
+                    mutated[k] += delta;
+                }
+            });
+            return mutated;
+        }
+
+        function seedPopulation() {
+            const pop = [];
+            for (let i = 0; i < GA_DEFAULTS.populationSize; i++) {
+                pop.push({ id: i, weights: mutateWeights({ ...DEFAULT_WEIGHTS }, 0.2), fitness: 0, evaluated: false });
+            }
+            return pop;
+        }
+
+        function tournamentSelect(population, k = GA_DEFAULTS.tournamentSize) {
+            let best = null;
+            for (let i = 0; i < k; i++) {
+                const ind = population[Math.floor(Math.random() * population.length)];
+                if (!best || ind.fitness > best.fitness) best = ind;
+            }
+            return best;
+        }
+
+        function crossoverWeights(a, b) {
+            if (Math.random() > GA_DEFAULTS.crossoverRate) return { ...a };
+            const child = {};
+            const keys = Object.keys(a);
+            const pivot = Math.floor(Math.random() * keys.length);
+            keys.forEach((k, idx) => {
+                child[k] = idx < pivot ? a[k] : b[k];
+            });
+            return child;
+        }
+
+        function evaluateBoardHeuristic(board) {
+            return evaluateBoardHeuristicWith(board, loadAIWeights());
+        }
+
+        function evaluateBoardHeuristicWith(board, w) {
+            const h = computeBoardFeatures(board);
+            // Higher score is better
+            return (
+                w.completeLines * h.completeLines +
+                w.aggregateHeight * h.aggregateHeight +
+                w.holes * h.holes +
+                w.bumpiness * h.bumpiness
+            );
+        }
+
+        function computeBoardFeatures(board) {
+            let aggregateHeight = 0;
+            let holes = 0;
+            let bumpiness = 0;
+            let completeLines = 0;
+
+            const heights = new Array(BOARD_WIDTH).fill(0);
+
+            for (let y = 0; y < BOARD_HEIGHT; y++) {
+                let filled = true;
+                for (let x = 0; x < BOARD_WIDTH; x++) {
+                    if (!board[y][x]) filled = false;
+                }
+                if (filled) completeLines++;
+            }
+
+            for (let x = 0; x < BOARD_WIDTH; x++) {
+                let y;
+                for (y = 0; y < BOARD_HEIGHT; y++) {
+                    if (board[y][x]) break;
+                }
+                heights[x] = BOARD_HEIGHT - y;
+                aggregateHeight += heights[x];
+
+                // Count holes below first block
+                let blockSeen = false;
+                for (let yy = 0; yy < BOARD_HEIGHT; yy++) {
+                    if (board[yy][x]) blockSeen = true;
+                    else if (blockSeen) holes++;
+                }
+            }
+
+            for (let x = 0; x < BOARD_WIDTH - 1; x++) {
+                bumpiness += Math.abs(heights[x] - heights[x + 1]);
+            }
+
+            return { aggregateHeight, holes, bumpiness, completeLines };
+        }
+
+        function cloneBoard(board) {
+            return board.map(row => row.slice());
+        }
+
+        function simulateLock(board, pieceType, shape, startX) {
+            // Drop shape from top at given x until collision
+            // Find initial y as the first collision above
+            let x = startX;
+            let y = 0;
+            // Adjust x if out of bounds
+            if (x < 0) x = 0;
+            if (x + shape[0].length > BOARD_WIDTH) x = BOARD_WIDTH - shape[0].length;
+
+            // If immediate collision at spawn, mark fail
+            if (collidesShape(board, shape, x, y)) {
+                return null;
+            }
+            while (!collidesShape(board, shape, x, y + 1)) {
+                y++;
+                if (y > BOARD_HEIGHT) break;
+            }
+
+            const newBoard = cloneBoard(board);
+            for (let yy = 0; yy < shape.length; yy++) {
+                for (let xx = 0; xx < shape[yy].length; xx++) {
+                    if (shape[yy][xx]) {
+                        const by = y + yy;
+                        const bx = x + xx;
+                        if (by >= 0 && by < BOARD_HEIGHT && bx >= 0 && bx < BOARD_WIDTH) {
+                            newBoard[by][bx] = pieceType;
+                        }
+                    }
+                }
+            }
+
+            // Clear lines
+            let cleared = 0;
+            for (let yy = BOARD_HEIGHT - 1; yy >= 0; yy--) {
+                if (newBoard[yy].every(c => c !== null)) {
+                    newBoard.splice(yy, 1);
+                    newBoard.unshift(Array(BOARD_WIDTH).fill(null));
+                    cleared++;
+                    yy++;
+                }
+            }
+
+            return { board: newBoard, cleared };
+        }
+
+        function collidesShape(board, shape, x, y) {
+            for (let yy = 0; yy < shape.length; yy++) {
+                for (let xx = 0; xx < shape[yy].length; xx++) {
+                    if (shape[yy][xx]) {
+                        const nx = x + xx;
+                        const ny = y + yy;
+                        if (nx < 0 || nx >= BOARD_WIDTH || ny >= BOARD_HEIGHT) return true;
+                        if (ny >= 0 && board[ny][nx]) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function rotateShape(shape) {
+            const rows = shape.length;
+            const cols = shape[0].length;
+            const rotated = [];
+            for (let i = 0; i < cols; i++) {
+                rotated[i] = [];
+                for (let j = rows - 1; j >= 0; j--) {
+                    rotated[i].push(shape[j][i]);
+                }
+            }
+            return rotated;
+        }
+
+        class Piece {
+            constructor(type) {
+                this.type = type;
+                this.shape = PIECES[type];
+                this.x = Math.floor(BOARD_WIDTH / 2) - Math.floor(this.shape[0].length / 2);
+                this.y = 0;
+                this.rotation = 0;
+            }
+
+            rotate() {
+                const rotated = [];
+                const rows = this.shape.length;
+                const cols = this.shape[0].length;
+                
+                for (let i = 0; i < cols; i++) {
+                    rotated[i] = [];
+                    for (let j = rows - 1; j >= 0; j--) {
+                        rotated[i].push(this.shape[j][i]);
+                    }
+                }
+                
+                return rotated;
+            }
+        }
+
+        class Player {
+            constructor(id, isAI = false) {
+                this.id = id;
+                this.isAI = isAI;
+                this.board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(null));
+                this.currentPiece = null;
+                this.nextPiece = this.randomPiece();
+                this.score = 0;
+                this.lines = 0;
+                this.level = 1;
+                this.gameOver = false;
+                this.powerUps = [];
+                this.cooldowns = new Map();
+                this.activeEffects = [];
+                this.dropTime = 1000;
+                this.lastDrop = Date.now();
+                this.target = null;
+                this.canvas = null;
+                this.ctx = null;
+                this.holdPiece = null;
+                this.canHold = true;
+                this.combo = 0;
+                // AI planning/learning
+                this.aiPlan = null; // { targetX, rotationIndex, performed: false }
+                this.aiLastPlannedPieceId = 0;
+                // GA genome assignment will set aiWeights when game starts
+                this.aiWeights = null;
+                this.aiFitness = 0; // accumulate score proxy (score + lines bonus)
+                this.aiStepCooldown = 0; // spacing between actions (ms)
+            }
+
+            init(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.spawnPiece();
+            }
+
+            randomPiece() {
+                const types = Object.keys(PIECES);
+                return types[Math.floor(Math.random() * types.length)];
+            }
+
+            spawnPiece() {
+                this.currentPiece = new Piece(this.nextPiece);
+                this.nextPiece = this.randomPiece();
+                this.canHold = true;
+                
+                if (this.collides(this.currentPiece)) {
+                    this.gameOver = true;
+                }
+                // Invalidate AI plan on new piece
+                this.aiPlan = null;
+            }
+
+            collides(piece, offsetX = 0, offsetY = 0) {
+                for (let y = 0; y < piece.shape.length; y++) {
+                    for (let x = 0; x < piece.shape[y].length; x++) {
+                        if (piece.shape[y][x]) {
+                            const newX = piece.x + x + offsetX;
+                            const newY = piece.y + y + offsetY;
+                            
+                            if (newX < 0 || newX >= BOARD_WIDTH || newY >= BOARD_HEIGHT) {
+                                return true;
+                            }
+                            
+                            if (newY >= 0 && this.board[newY][newX]) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            move(dir) {
+                if (!this.currentPiece || this.gameOver) return;
+                
+                if (!this.collides(this.currentPiece, dir, 0)) {
+                    this.currentPiece.x += dir;
+                }
+            }
+
+            rotate() {
+                if (!this.currentPiece || this.gameOver) return;
+                
+                const oldShape = this.currentPiece.shape;
+                this.currentPiece.shape = this.currentPiece.rotate();
+                
+                if (this.collides(this.currentPiece)) {
+                    // Try wall kicks
+                    const kicks = [0, -1, 1, -2, 2];
+                    let valid = false;
+                    
+                    for (let kick of kicks) {
+                        if (!this.collides(this.currentPiece, kick, 0)) {
+                            this.currentPiece.x += kick;
+                            valid = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!valid) {
+                        this.currentPiece.shape = oldShape;
+                    }
+                }
+            }
+
+            drop() {
+                if (!this.currentPiece || this.gameOver) return false;
+                
+                if (!this.collides(this.currentPiece, 0, 1)) {
+                    this.currentPiece.y++;
+                    return true;
+                } else {
+                    this.lock();
+                    return false;
+                }
+            }
+
+            hardDrop() {
+                if (!this.currentPiece || this.gameOver) return;
+                
+                let dropDistance = 0;
+                while (!this.collides(this.currentPiece, 0, 1)) {
+                    this.currentPiece.y++;
+                    dropDistance++;
+                }
+                
+                this.score += dropDistance * 2;
+                this.lock();
+            }
+
+            lock() {
+                const piece = this.currentPiece;
+                
+                for (let y = 0; y < piece.shape.length; y++) {
+                    for (let x = 0; x < piece.shape[y].length; x++) {
+                        if (piece.shape[y][x]) {
+                            const boardY = piece.y + y;
+                            const boardX = piece.x + x;
+                            
+                            if (boardY >= 0) {
+                                this.board[boardY][boardX] = piece.type;
+                            }
+                        }
+                    }
+                }
+                
+                this.clearLines();
+                this.spawnPiece();
+            }
+
+            clearLines() {
+                let linesCleared = 0;
+                
+                for (let y = BOARD_HEIGHT - 1; y >= 0; y--) {
+                    if (this.board[y].every(cell => cell !== null)) {
+                        this.board.splice(y, 1);
+                        this.board.unshift(Array(BOARD_WIDTH).fill(null));
+                        linesCleared++;
+                        y++; // Check the same row again
+                        
+                        // Visual effect
+                        this.createLineEffect(y);
+                    }
+                }
+                
+                if (linesCleared > 0) {
+                    this.lines += linesCleared;
+                    this.combo++;
+                    
+                    // Scoring
+                    const baseScore = [0, 100, 300, 500, 800][linesCleared] || 0;
+                    this.score += baseScore * this.level * (1 + this.combo * 0.1);
+                    
+                    // Level up
+                    this.level = Math.floor(this.lines / 10) + 1;
+                    this.dropTime = Math.max(100, 1000 - (this.level - 1) * 100);
+                    
+                    // Power-up chance
+                    if (this.lines % 5 === 0) {
+                        this.addRandomPowerUp();
+                    }
+                } else {
+                    this.combo = 0;
+                }
+            }
+
+            addRandomPowerUp() {
+                if (this.powerUps.length >= 3) return;
+                
+                const types = IMPLEMENTED_POWERUPS;
+                const type = types[Math.floor(Math.random() * types.length)];
+                this.powerUps.push(type);
+            }
+
+            usePowerUp(index, targetId) {
+                if (index >= this.powerUps.length) return;
+                
+                const powerUp = this.powerUps[index];
+                const cooldownKey = powerUp;
+                
+                if (this.cooldowns.has(cooldownKey)) {
+                    const remaining = this.cooldowns.get(cooldownKey) - Date.now();
+                    if (remaining > 0) return;
+                }
+                
+                this.powerUps.splice(index, 1);
+                this.cooldowns.set(cooldownKey, Date.now() + 5000);
+                
+                // Apply power-up effect
+                this.applyPowerUp(powerUp, targetId);
+            }
+
+            applyPowerUp(type, targetId) {
+                const target = game.players.find(p => p.id === targetId);
+                if (!target && POWERUPS[type].type === 'offensive') return;
+                
+                switch (type) {
+                    case 'GARBAGE':
+                        if (target) {
+                            for (let i = 0; i < 3; i++) {
+                                const garbageLine = Array(BOARD_WIDTH).fill('garbage');
+                                const hole = Math.floor(Math.random() * BOARD_WIDTH);
+                                garbageLine[hole] = null;
+                                target.board.push(garbageLine);
+                                target.board.shift();
+                            }
+                            this.showAttackEffect(target, 'GARBAGE!');
+                        }
+                        break;
+                        
+                    case 'SPEED':
+                        if (target) {
+                            target.dropTime = Math.max(50, target.dropTime / 2);
+                            setTimeout(() => {
+                                target.dropTime = Math.max(100, 1000 - (target.level - 1) * 100);
+                            }, 15000);
+                            this.showAttackEffect(target, 'SPEED!');
+                        }
+                        break;
+                        
+                    case 'BLIND':
+                        if (target) {
+                            target.activeEffects.push({ type: 'blind', endTime: Date.now() + 10000 });
+                            this.showAttackEffect(target, 'BLIND!');
+                        }
+                        break;
+                        
+                    case 'SHIELD':
+                        this.activeEffects.push({ type: 'shield', endTime: Date.now() + 30000 });
+                        break;
+                        
+                    case 'CLEAR':
+                        for (let i = 0; i < 3; i++) {
+                            this.board.pop();
+                            this.board.unshift(Array(BOARD_WIDTH).fill(null));
+                        }
+                        break;
+                        
+                    case 'SLOW':
+                        this.dropTime = Math.min(2000, this.dropTime * 2);
+                        setTimeout(() => {
+                            this.dropTime = Math.max(100, 1000 - (this.level - 1) * 100);
+                        }, 20000);
+                        break;
+                        
+                    case 'ELIMINATE':
+                        game.players.forEach(p => {
+                            if (p.id !== this.id && !p.gameOver) {
+                                p.board.pop();
+                                p.board.unshift(Array(BOARD_WIDTH).fill(null));
+                                this.showAttackEffect(p, 'ELIMINATED!');
+                            }
+                        });
+                        break;
+                }
+            }
+
+            createLineEffect(y) {
+                // This would create visual effects for line clearing
+                // Implementation would add DOM elements or canvas effects
+            }
+
+            showAttackEffect(target, text) {
+                const indicator = document.createElement('div');
+                indicator.className = 'attackIndicator';
+                indicator.textContent = text;
+                const section = document.querySelector(`#player${target.id}`);
+                if (section) {
+                    section.appendChild(indicator);
+                    setTimeout(() => indicator.remove(), 1000);
+                }
+            }
+
+            getGhostPiece() {
+                if (!this.currentPiece) return null;
+                
+                const ghost = {
+                    ...this.currentPiece,
+                    y: this.currentPiece.y
+                };
+                
+                while (!this.collides(ghost, 0, 1)) {
+                    ghost.y++;
+                }
+                
+                return ghost;
+            }
+
+            draw() {
+                if (!this.ctx) return;
+                
+                // Clear canvas
+                this.ctx.fillStyle = COLORS.EMPTY;
+                this.ctx.fillRect(0, 0, BOARD_WIDTH * BLOCK_SIZE, BOARD_HEIGHT * BLOCK_SIZE);
+                
+                // Draw board
+                for (let y = 0; y < BOARD_HEIGHT; y++) {
+                    for (let x = 0; x < BOARD_WIDTH; x++) {
+                        if (this.board[y][x]) {
+                            this.ctx.fillStyle = this.board[y][x] === 'garbage' ? '#666' : COLORS[this.board[y][x]];
+                            this.ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                        }
+                    }
+                }
+                
+                // Draw ghost piece
+                const ghost = this.getGhostPiece();
+                if (ghost && !this.activeEffects.some(e => e.type === 'blind')) {
+                    this.ctx.fillStyle = COLORS.GHOST;
+                    for (let y = 0; y < ghost.shape.length; y++) {
+                        for (let x = 0; x < ghost.shape[y].length; x++) {
+                            if (ghost.shape[y][x]) {
+                                this.ctx.fillRect(
+                                    (ghost.x + x) * BLOCK_SIZE,
+                                    (ghost.y + y) * BLOCK_SIZE,
+                                    BLOCK_SIZE - 1,
+                                    BLOCK_SIZE - 1
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                // Draw current piece
+                if (this.currentPiece) {
+                    this.ctx.fillStyle = COLORS[this.currentPiece.type];
+                    for (let y = 0; y < this.currentPiece.shape.length; y++) {
+                        for (let x = 0; x < this.currentPiece.shape[y].length; x++) {
+                            if (this.currentPiece.shape[y][x]) {
+                                this.ctx.fillRect(
+                                    (this.currentPiece.x + x) * BLOCK_SIZE,
+                                    (this.currentPiece.y + y) * BLOCK_SIZE,
+                                    BLOCK_SIZE - 1,
+                                    BLOCK_SIZE - 1
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                // Draw grid lines
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                this.ctx.lineWidth = 0.5;
+                for (let i = 0; i <= BOARD_WIDTH; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i * BLOCK_SIZE, 0);
+                    this.ctx.lineTo(i * BLOCK_SIZE, BOARD_HEIGHT * BLOCK_SIZE);
+                    this.ctx.stroke();
+                }
+                for (let i = 0; i <= BOARD_HEIGHT; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, i * BLOCK_SIZE);
+                    this.ctx.lineTo(BOARD_WIDTH * BLOCK_SIZE, i * BLOCK_SIZE);
+                    this.ctx.stroke();
+                }
+                
+                // Draw game over overlay
+                if (this.gameOver) {
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    this.ctx.fillRect(0, 0, BOARD_WIDTH * BLOCK_SIZE, BOARD_HEIGHT * BLOCK_SIZE);
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.font = 'bold 24px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('GAME OVER', BOARD_WIDTH * BLOCK_SIZE / 2, BOARD_HEIGHT * BLOCK_SIZE / 2);
+                }
+            }
+
+            update() {
+                if (this.gameOver) return;
+                
+                const now = Date.now();
+                
+                // Auto drop
+                if (now - this.lastDrop > this.dropTime) {
+                    this.drop();
+                    this.lastDrop = now;
+                }
+                
+                // Update cooldowns
+                for (let [key, time] of this.cooldowns) {
+                    if (time < now) {
+                        this.cooldowns.delete(key);
+                    }
+                }
+                
+                // Update effects
+                this.activeEffects = this.activeEffects.filter(effect => effect.endTime > now);
+                
+                // AI logic: plan and execute steps
+                if (this.isAI) {
+                    if (!this.aiPlan) {
+                        this.aiPlan = this.planBestMove();
+                    }
+                    this.executePlannedStep();
+                }
+            }
+
+            aiMove() { /* legacy noop retained for compatibility */ }
+
+            executePlannedStep() {
+                if (!this.aiPlan || !this.currentPiece) return;
+                const now = Date.now();
+                if (!this._lastAIStep) this._lastAIStep = 0;
+                const stepDelay = Math.max(60, 260 - this.level * 20); // faster with level
+                if (now - this._lastAIStep < stepDelay) return;
+                this._lastAIStep = now;
+
+                // Apply rotation until target rotation reached
+                const desiredRotations = this.aiPlan.rotationIndex;
+                let currentRotations = 0;
+                // Count how many 90-degree rotations from original shape would equal current shape
+                // Instead, we can compare by trying to rotate from original
+                // For simplicity: just rotate if not at desired count (approx)
+                if (this._aiRotationProgress === undefined) this._aiRotationProgress = 0;
+                if (this._aiRotationProgress < desiredRotations) {
+                    this.rotate();
+                    this._aiRotationProgress++;
+                    return;
+                }
+
+                // Move horizontally toward targetX
+                if (this.currentPiece.x < this.aiPlan.targetX) {
+                    this.move(1);
+                    return;
+                }
+                if (this.currentPiece.x > this.aiPlan.targetX) {
+                    this.move(-1);
+                    return;
+                }
+
+                // When aligned and rotated, hard drop
+                this.hardDrop();
+                this._aiRotationProgress = 0;
+                this.aiPlan = null;
+
+                // Occasionally use a power-up if available
+                if (this.powerUps.length > 0 && Math.random() < 0.15) {
+                    const targets = game.players.filter(p => p.id !== this.id && !p.gameOver);
+                    if (targets.length > 0) {
+                        const target = targets[Math.floor(Math.random() * targets.length)];
+                        this.usePowerUp(0, target.id);
+                    }
+                }
+            }
+
+            planBestMove() {
+                if (!this.currentPiece) return null;
+                const type = this.currentPiece.type;
+                const baseShape = PIECES[type];
+                const rotations = [];
+                rotations.push(baseShape);
+                rotations.push(rotateShape(rotations[rotations.length - 1]));
+                rotations.push(rotateShape(rotations[rotations.length - 1]));
+                rotations.push(rotateShape(rotations[rotations.length - 1]));
+
+                // Deduplicate rotationally equivalent shapes by stringifying
+                const uniqueRotations = [];
+                const seen = new Set();
+                for (let i = 0; i < 4; i++) {
+                    const key = JSON.stringify(rotations[i]);
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueRotations.push({ shape: rotations[i], rotationIndex: i });
+                    }
+                }
+
+                let best = null;
+                let bestScore = -Infinity;
+                const board = this.board;
+                const weights = this.aiWeights || loadAIWeights();
+
+                for (const rot of uniqueRotations) {
+                    const width = rot.shape[0].length;
+                    for (let x = -2; x <= BOARD_WIDTH - 1; x++) { // generous scan window with bounds fix inside simulate
+                        const sim = simulateLock(board, type, rot.shape, x);
+                        if (!sim) continue;
+                        const score = evaluateBoardHeuristicWith(sim.board, weights);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            best = { targetX: clampX(x, rot.shape), rotationIndex: rot.rotationIndex };
+                        }
+                    }
+                }
+
+                return best;
+            }
+        }
+
+        function clampX(x, shape) {
+            if (x < 0) return 0;
+            const maxX = BOARD_WIDTH - shape[0].length;
+            if (x > maxX) return maxX;
+            return x;
+        }
+
+        class Game {
+            constructor(playerCount) {
+                this.players = [];
+                this.playerCount = playerCount;
+                this.currentPlayer = 0;
+                this.running = false;
+                this.lastFrame = 0;
+                // GA state
+                this.gaState = loadAIWeights(); // { population, index, history }
+                this.sessionAIResults = [];
+            }
+
+            init() {
+                // Create game container
+                const container = document.getElementById('gameContainer');
+                container.innerHTML = '';
+                
+                for (let i = 0; i < this.playerCount; i++) {
+                    const isMain = i === 0;
+                    const isAI = i > 0;
+                    
+                    const player = new Player(i, isAI);
+                    this.players.push(player);
+                    
+                    // Create player section
+                    const section = document.createElement('div');
+                    section.className = `playerSection ${isMain ? 'main' : ''}`;
+                    section.id = `player${i}`;
+                    
+                    // Header
+                    const header = document.createElement('div');
+                    header.className = 'playerHeader';
+                    header.textContent = isMain ? 'YOU' : `CPU ${i}`;
+                    section.appendChild(header);
+                    
+                    // Canvas
+                    const canvas = document.createElement('canvas');
+                    canvas.width = BOARD_WIDTH * BLOCK_SIZE;
+                    canvas.height = BOARD_HEIGHT * BLOCK_SIZE;
+                    canvas.className = isMain ? '' : 'miniBoard';
+                    
+                    const boardDiv = document.createElement('div');
+                    boardDiv.className = 'gameBoard';
+                    boardDiv.appendChild(canvas);
+                    section.appendChild(boardDiv);
+                    
+                    // Stats
+                    const stats = document.createElement('div');
+                    stats.className = 'stats';
+                    stats.innerHTML = `
+                        <div><span>Score:</span> <span id="score${i}">0</span></div>
+                        <div><span>Lines:</span> <span id="lines${i}">0</span></div>
+                        <div><span>Level:</span> <span id="level${i}">1</span></div>
+                    `;
+                    section.appendChild(stats);
+                    
+                    // Power-ups (only for main player)
+                    if (isMain) {
+                        const powerUpsDiv = document.createElement('div');
+                        powerUpsDiv.className = 'powerUpsContainer';
+                        powerUpsDiv.id = 'powerUps';
+                        section.appendChild(powerUpsDiv);
+                        
+                        // Target selector
+                        const targetDiv = document.createElement('div');
+                        targetDiv.className = 'targetSelector';
+                        targetDiv.innerHTML = '<div>Target:</div>';
+                        const targetButtons = document.createElement('div');
+                        
+                        for (let j = 1; j < this.playerCount; j++) {
+                            const btn = document.createElement('button');
+                            btn.className = 'targetButton';
+                            btn.textContent = `CPU ${j}`;
+                            btn.onclick = () => this.selectTarget(j);
+                            if (j === 1) btn.classList.add('selected');
+                            targetButtons.appendChild(btn);
+                        }
+                        
+                        targetDiv.appendChild(targetButtons);
+                        section.appendChild(targetDiv);
+                    }
+                    
+                    container.appendChild(section);
+                    player.init(canvas);
+
+                    // Assign GA genomes to AI players
+                    if (isAI) {
+                        const genome = this.nextGenome();
+                        player.aiWeights = genome.weights;
+                        player._genomeId = genome.id;
+                    }
+                }
+                
+                // Set initial target
+                if (this.players.length > 1) {
+                    this.players[0].target = 1;
+                }
+                
+                this.running = true;
+                this.setupControls();
+                this.gameLoop();
+            }
+
+            nextGenome() {
+                const pop = this.gaState.population;
+                // Find first unevaluated genome to assign, else wrap around
+                for (let i = 0; i < pop.length; i++) {
+                    const g = pop[(this.gaState.index + i) % pop.length];
+                    if (!g.assigned) {
+                        g.assigned = true;
+                        this.gaState.index = (this.gaState.index + i + 1) % pop.length;
+                        saveAIWeights(this.gaState);
+                        return g;
+                    }
+                }
+                // If all assigned, just cycle
+                const g = pop[this.gaState.index];
+                this.gaState.index = (this.gaState.index + 1) % pop.length;
+                saveAIWeights(this.gaState);
+                return g;
+            }
+
+            selectTarget(targetId) {
+                this.players[0].target = targetId;
+                document.querySelectorAll('.targetButton').forEach((btn, i) => {
+                    btn.classList.toggle('selected', i === targetId - 1);
+                });
+            }
+
+            setupControls() {
+                document.addEventListener('keydown', (e) => {
+                    if (!this.running) return;
+                    
+                    const player = this.players[0];
+                    if (player.gameOver) return;
+                    
+                    switch (e.key) {
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            player.move(-1);
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            player.move(1);
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            player.drop();
+                            player.score++;
+                            break;
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            player.rotate();
+                            break;
+                        case ' ':
+                            e.preventDefault();
+                            player.hardDrop();
+                            break;
+                        case '1':
+                        case '2':
+                        case '3':
+                            const index = parseInt(e.key) - 1;
+                            if (player.powerUps[index]) {
+                                player.usePowerUp(index, player.target);
+                                this.updatePowerUps();
+                            }
+                            break;
+                        case 'Tab':
+                            e.preventDefault();
+                            const targets = this.players.filter(p => p.id !== 0 && !p.gameOver);
+                            if (targets.length > 0) {
+                                const currentIndex = targets.findIndex(t => t.id === player.target);
+                                const nextIndex = (currentIndex + 1) % targets.length;
+                                this.selectTarget(targets[nextIndex].id);
+                            }
+                            break;
+                    }
+                });
+
+                // Touch controls for mobile
+                let touchStartX = null;
+                let touchStartY = null;
+                
+                document.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                });
+                
+                document.addEventListener('touchmove', (e) => {
+                    if (!touchStartX || !touchStartY) return;
+                    
+                    const touchEndX = e.touches[0].clientX;
+                    const touchEndY = e.touches[0].clientY;
+                    
+                    const dx = touchEndX - touchStartX;
+                    const dy = touchEndY - touchStartY;
+                    
+                    const player = this.players[0];
+                    if (player.gameOver) return;
+                    
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > 50) {
+                            player.move(1);
+                            touchStartX = touchEndX;
+                        } else if (dx < -50) {
+                            player.move(-1);
+                            touchStartX = touchEndX;
+                        }
+                    } else {
+                        if (dy > 50) {
+                            player.drop();
+                            touchStartY = touchEndY;
+                        }
+                    }
+                });
+                
+                document.addEventListener('touchend', (e) => {
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    
+                    const dx = touchEndX - touchStartX;
+                    const dy = touchEndY - touchStartY;
+                    
+                    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+                        this.players[0].rotate();
+                    }
+                    
+                    touchStartX = null;
+                    touchStartY = null;
+                });
+            }
+
+            updatePowerUps() {
+                const container = document.getElementById('powerUps');
+                if (!container) return;
+                
+                container.innerHTML = '';
+                const player = this.players[0];
+                
+                player.powerUps.forEach((powerUp, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'powerUp';
+                    
+                    const cooldownTime = player.cooldowns.get(powerUp);
+                    if (cooldownTime && cooldownTime > Date.now()) {
+                        div.classList.add('cooldown');
+                        const remaining = Math.ceil((cooldownTime - Date.now()) / 1000);
+                        div.innerHTML = `
+                            <div class="cooldownTimer">${remaining}</div>
+                        `;
+                    } else {
+                        div.innerHTML = `
+                            <div class="icon">${POWERUPS[powerUp].icon}</div>
+                            <div class="name">${POWERUPS[powerUp].name}</div>
+                        `;
+                        div.onclick = () => {
+                            player.usePowerUp(index, player.target);
+                            this.updatePowerUps();
+                        };
+                    }
+                    
+                    container.appendChild(div);
+                });
+            }
+
+            updateStats() {
+                this.players.forEach(player => {
+                    const scoreEl = document.getElementById(`score${player.id}`);
+                    const linesEl = document.getElementById(`lines${player.id}`);
+                    const levelEl = document.getElementById(`level${player.id}`);
+                    
+                    if (scoreEl) scoreEl.textContent = player.score;
+                    if (linesEl) linesEl.textContent = player.lines;
+                    if (levelEl) levelEl.textContent = player.level;
+                });
+            }
+
+            gameLoop(timestamp = 0) {
+                if (!this.running) return;
+                
+                const deltaTime = timestamp - this.lastFrame;
+                this.lastFrame = timestamp;
+                
+                // Update all players
+                this.players.forEach(player => {
+                    player.update();
+                    player.draw();
+                });
+                
+                // Update UI
+                this.updateStats();
+                this.updatePowerUps();
+                
+                // Check for game over
+                const alivePlayers = this.players.filter(p => !p.gameOver);
+                if (alivePlayers.length <= 1 && this.playerCount > 1) {
+                    this.endGame(alivePlayers[0]);
+                } else if (alivePlayers.length === 0) {
+                    this.endGame(null);
+                } else {
+                    requestAnimationFrame((t) => this.gameLoop(t));
+                }
+            }
+
+            endGame(winner) {
+                this.running = false;
+                
+                setTimeout(() => {
+                    // Update GA fitness for assigned genomes
+                    const aiPlayers = this.players.filter(p => p.isAI);
+                    aiPlayers.forEach(p => {
+                        const fitness = p.score + p.lines * 150; // emphasize lines
+                        const genome = this.gaState.population.find(g => g.id === p._genomeId);
+                        if (genome) {
+                            genome.fitness = Math.max(genome.fitness || 0, fitness);
+                            genome.evaluated = true;
+                            genome.assigned = false;
+                        }
+                    });
+
+                    // If all evaluated, evolve a new generation
+                    if (this.gaState.population.every(g => g.evaluated)) {
+                        this.evolvePopulation();
+                    }
+                    saveAIWeights(this.gaState);
+                    const message = winner ? 
+                        (winner.isAI ? `CPU ${winner.id} Wins!` : 'You Win!') : 
+                        'Game Over!';
+                    
+                    if (confirm(`${message}\n\nPlay again?`)) {
+                        location.reload();
+                    }
+                }, 1000);
+            }
+
+            evolvePopulation() {
+                const pop = this.gaState.population.slice().sort((a, b) => b.fitness - a.fitness);
+                // Elitism: keep top 2
+                const next = [];
+                const eliteCount = Math.min(2, pop.length);
+                for (let i = 0; i < eliteCount; i++) {
+                    next.push({ id: i, weights: { ...pop[i].weights }, fitness: 0, evaluated: false });
+                }
+                // Fill rest with offspring via tournament selection + crossover + mutation
+                while (next.length < GA_DEFAULTS.populationSize) {
+                    const parentA = tournamentSelect(pop);
+                    const parentB = tournamentSelect(pop);
+                    let childW = crossoverWeights(parentA.weights, parentB.weights);
+                    childW = mutateWeights(childW, GA_DEFAULTS.mutationStrength);
+                    next.push({ id: next.length, weights: childW, fitness: 0, evaluated: false });
+                }
+                this.gaState.population = next;
+                this.gaState.index = 0;
+                this.gaState.history.push({ ts: Date.now(), bestFitness: pop[0]?.fitness || 0 });
+            }
+        }
+
+        // Global game instance
+        let game = null;
+
+        function startGame(playerCount) {
+            document.getElementById('startMenu').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'flex';
+            document.querySelector('.controls').style.display = 'block';
+            
+            game = new Game(playerCount);
+            game.init();
+        }
+    </script>
+</body>
+</html>

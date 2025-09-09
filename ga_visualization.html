@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris AI Genetic Algorithm Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .analysis-section {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            color: #f093fb;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+
+        h3 {
+            color: #667eea;
+            margin: 20px 0 10px;
+            font-size: 1.3em;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-good {
+            background-color: #4ade80;
+        }
+
+        .status-warning {
+            background-color: #fbbf24;
+        }
+
+        .status-issue {
+            background-color: #f87171;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .parameter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .parameter-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .parameter-name {
+            font-weight: bold;
+            color: #f5576c;
+            margin-bottom: 5px;
+        }
+
+        .parameter-value {
+            font-size: 1.2em;
+            color: #fff;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+
+        .visualization-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .flow-step {
+            flex: 1;
+            min-width: 150px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .flow-step::after {
+            content: '→';
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #f093fb;
+        }
+
+        .flow-step:last-child::after {
+            display: none;
+        }
+
+        .weight-display {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .weight-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .weight-name {
+            color: #fbbf24;
+        }
+
+        .weight-value {
+            font-weight: bold;
+        }
+
+        .issue-list {
+            list-style: none;
+            margin: 15px 0;
+        }
+
+        .issue-list li {
+            padding: 10px;
+            margin: 8px 0;
+            background: rgba(248, 113, 113, 0.2);
+            border-left: 4px solid #f87171;
+            border-radius: 5px;
+        }
+
+        .recommendation-list {
+            list-style: none;
+            margin: 15px 0;
+        }
+
+        .recommendation-list li {
+            padding: 10px;
+            margin: 8px 0;
+            background: rgba(74, 222, 128, 0.2);
+            border-left: 4px solid #4ade80;
+            border-radius: 5px;
+        }
+
+        .implementation-grade {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+
+        .grade-b {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        }
+
+        .population-visualization {
+            margin: 20px 0;
+        }
+
+        .genome-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            padding: 8px;
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .genome-id {
+            width: 60px;
+            font-weight: bold;
+            color: #f093fb;
+        }
+
+        .fitness-bar {
+            flex: 1;
+            height: 20px;
+            background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 3px;
+            margin: 0 10px;
+            position: relative;
+        }
+
+        .fitness-value {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #000;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 Tetris AI Genetic Algorithm Analysis 🎮</h1>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Implementation Overview</h2>
+            <p>The Tetris game includes a genetic algorithm (GA) implementation for evolving AI players. The system uses evolutionary principles to optimize playing strategies over multiple generations.</p>
+            
+            <div class="implementation-grade grade-b">Grade: B (Good Implementation)</div>
+            
+            <div class="visualization-container">
+                <h3>GA Workflow</h3>
+                <div class="flow-diagram">
+                    <div class="flow-step">Initialize Population</div>
+                    <div class="flow-step">Play Games</div>
+                    <div class="flow-step">Evaluate Fitness</div>
+                    <div class="flow-step">Selection</div>
+                    <div class="flow-step">Crossover</div>
+                    <div class="flow-step">Mutation</div>
+                    <div class="flow-step">New Generation</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>GA Parameters</h2>
+            <div class="parameter-grid">
+                <div class="parameter-card">
+                    <div class="parameter-name">Population Size</div>
+                    <div class="parameter-value">12 genomes</div>
+                </div>
+                <div class="parameter-card">
+                    <div class="parameter-name">Tournament Size</div>
+                    <div class="parameter-value">3 individuals</div>
+                </div>
+                <div class="parameter-card">
+                    <div class="parameter-name">Mutation Rate</div>
+                    <div class="parameter-value">15%</div>
+                </div>
+                <div class="parameter-card">
+                    <div class="parameter-name">Mutation Strength</div>
+                    <div class="parameter-value">8%</div>
+                </div>
+                <div class="parameter-card">
+                    <div class="parameter-name">Crossover Rate</div>
+                    <div class="parameter-value">70%</div>
+                </div>
+                <div class="parameter-card">
+                    <div class="parameter-name">Elitism</div>
+                    <div class="parameter-value">Top 2 genomes</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Genome Structure (Weights)</h2>
+            <p>Each genome consists of 4 weight parameters that evaluate board states:</p>
+            <div class="weight-display">
+                <div class="weight-item">
+                    <span class="weight-name">aggregateHeight</span>
+                    <span class="weight-value">-0.510066</span>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-name">completeLines</span>
+                    <span class="weight-value">+0.760666</span>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-name">holes</span>
+                    <span class="weight-value">-0.35663</span>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-name">bumpiness</span>
+                    <span class="weight-value">-0.184483</span>
+                </div>
+            </div>
+            <p style="margin-top: 15px; opacity: 0.9;">These weights create a heuristic evaluation function where negative weights penalize undesirable features (height, holes, bumpiness) and positive weights reward beneficial features (completed lines).</p>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Fitness Function</h2>
+            <div class="code-block">
+                fitness = score + (lines_cleared × 150)
+            </div>
+            <p>The fitness function appropriately emphasizes line clearing (×150 multiplier) over raw score, which encourages strategies that create complete lines rather than just surviving.</p>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Selection Method</h2>
+            <h3>Tournament Selection</h3>
+            <p>The implementation uses tournament selection with k=3:</p>
+            <ol style="margin-left: 20px; margin-top: 10px;">
+                <li>Randomly select 3 individuals from the population</li>
+                <li>Choose the individual with highest fitness</li>
+                <li>Repeat for each parent needed</li>
+            </ol>
+            <p style="margin-top: 10px;">This method provides good selection pressure while maintaining diversity.</p>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Genetic Operators</h2>
+            
+            <h3>Crossover (70% probability)</h3>
+            <p>Uses single-point crossover:</p>
+            <div class="code-block">
+                Parent A: [w1, w2, | w3, w4]
+                Parent B: [w5, w6, | w7, w8]
+                Child:    [w1, w2, | w7, w8]
+            </div>
+            
+            <h3>Mutation (15% probability per gene)</h3>
+            <p>Applies Gaussian noise with 8% strength:</p>
+            <div class="code-block">
+                new_weight = old_weight + (random(-1, 1) × 0.08 × scale)
+            </div>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-warning"></span>Implementation Issues</h2>
+            <ul class="issue-list">
+                <li><strong>Small Population Size:</strong> Only 12 genomes limits genetic diversity and exploration capability</li>
+                <li><strong>Simple Genome:</strong> Only 4 parameters may not capture all important Tetris strategies</li>
+                <li><strong>No Adaptive Parameters:</strong> Fixed mutation/crossover rates don't adapt as evolution progresses</li>
+                <li><strong>Limited Fitness Evaluation:</strong> Fitness only considers score and lines, not survival time or efficiency</li>
+                <li><strong>No Speciation:</strong> All genomes compete directly without niching or species formation</li>
+            </ul>
+        </div>
+
+        <div class="analysis-section">
+            <h2><span class="status-indicator status-good"></span>Strengths</h2>
+            <ul class="recommendation-list">
+                <li><strong>Persistence:</strong> GA state saved to localStorage for continuous learning across sessions</li>
+                <li><strong>Elitism:</strong> Preserves top 2 performers ensuring best solutions aren't lost</li>
+                <li><strong>Proper Evaluation:</strong> Each genome gets fair evaluation through complete games</li>
+                <li><strong>Tournament Selection:</strong> Good balance between selection pressure and diversity</li>
+                <li><strong>Feature Engineering:</strong> Well-chosen heuristic features (height, holes, lines, bumpiness)</li>
+            </ul>
+        </div>
+
+        <div class="analysis-section">
+            <h2>📊 Population Evolution Visualization</h2>
+            <div class="population-visualization">
+                <h3>Generation N (Example)</h3>
+                <div class="genome-bar">
+                    <span class="genome-id">Elite 1</span>
+                    <div class="fitness-bar" style="width: 95%">
+                        <span class="fitness-value">8500</span>
+                    </div>
+                </div>
+                <div class="genome-bar">
+                    <span class="genome-id">Elite 2</span>
+                    <div class="fitness-bar" style="width: 88%">
+                        <span class="fitness-value">7920</span>
+                    </div>
+                </div>
+                <div class="genome-bar">
+                    <span class="genome-id">Child 1</span>
+                    <div class="fitness-bar" style="width: 75%">
+                        <span class="fitness-value">6750</span>
+                    </div>
+                </div>
+                <div class="genome-bar">
+                    <span class="genome-id">Child 2</span>
+                    <div class="fitness-bar" style="width: 60%">
+                        <span class="fitness-value">5400</span>
+                    </div>
+                </div>
+                <div class="genome-bar">
+                    <span class="genome-id">Mutant</span>
+                    <div class="fitness-bar" style="width: 45%">
+                        <span class="fitness-value">4050</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-section">
+            <h2>🔧 Recommendations for Improvement</h2>
+            <ul class="recommendation-list">
+                <li><strong>Increase Population:</strong> Expand to 20-50 genomes for better diversity</li>
+                <li><strong>Add More Features:</strong> Include piece-specific weights, T-spin detection, combo tracking</li>
+                <li><strong>Adaptive Mutation:</strong> Decrease mutation rate as fitness improves</li>
+                <li><strong>Multi-objective Fitness:</strong> Balance multiple goals (lines, survival time, efficiency)</li>
+                <li><strong>Implement NEAT:</strong> Evolve neural network topology for more complex strategies</li>
+                <li><strong>Add Visualization:</strong> Real-time display of fitness progression and best performers</li>
+                <li><strong>Parallel Evaluation:</strong> Run multiple games simultaneously for faster evolution</li>
+            </ul>
+        </div>
+
+        <div class="analysis-section">
+            <h2>✅ Conclusion</h2>
+            <p>The genetic algorithm implementation in this Tetris game is <strong>properly implemented</strong> with all core GA components present and functional:</p>
+            <ul style="margin: 15px 0; list-style: none;">
+                <li>✅ Population management with persistence</li>
+                <li>✅ Fitness evaluation based on game performance</li>
+                <li>✅ Tournament selection for parent selection</li>
+                <li>✅ Crossover operator for recombination</li>
+                <li>✅ Mutation operator for exploration</li>
+                <li>✅ Elitism to preserve best solutions</li>
+                <li>✅ Generational evolution cycle</li>
+            </ul>
+            <p>While the implementation is solid and functional, there's room for enhancement in population size, genome complexity, and adaptive parameters. The current system effectively demonstrates evolutionary learning in game AI.</p>
+        </div>
+    </div>
+</body>
+</html>
