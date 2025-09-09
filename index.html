@@ -170,6 +170,7 @@
             font-size: 48px;
             margin-bottom: 30px;
             background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
@@ -320,9 +321,13 @@
     <div id="startMenu">
         <h1 class="menuTitle">TETRIS BATTLE</h1>
         <div class="menuButtons">
-            <button class="menuButton" onclick="startGame(2)">2 Players</button>
-            <button class="menuButton" onclick="startGame(3)">3 Players</button>
-            <button class="menuButton" onclick="startGame(4)">4 Players</button>
+            <button class="menuButton" onclick="startGame(2, 'genetic')">2 Players (Genetic AI)</button>
+            <button class="menuButton" onclick="startGame(3, 'genetic')">3 Players (Genetic AI)</button>
+            <button class="menuButton" onclick="startGame(4, 'genetic')">4 Players (Genetic AI)</button>
+            <button class="menuButton" onclick="startGame(2, 'markov')">2 Players (Markov Chain AI)</button>
+            <button class="menuButton" onclick="startGame(3, 'markov')">3 Players (Markov Chain AI)</button>
+            <button class="menuButton" onclick="startGame(4, 'markov')">4 Players (Markov Chain AI)</button>
+            <button class="menuButton" onclick="startGame(2, 'mixed')">2 Players (Mixed AI)</button>
         </div>
     </div>
 
@@ -391,6 +396,16 @@
 
         // -------- Simple Learning AI (Heuristic + Evolution) --------
         const AI_STORAGE_KEY = 'tetris_ai_weights_v2_population';
+        
+        // -------- Markov Chain AI --------
+        const MARKOV_STORAGE_KEY = 'tetris_markov_chains_v2_human_learned';
+        const MARKOV_DEFAULTS = {
+            stateHistorySize: 1000,    // How many state transitions to remember
+            minObservations: 3,        // Minimum observations before using chain (lowered since learning from expert)
+            humanMimicRate: 0.85,      // How often to follow learned human patterns vs exploring
+            stateSimplification: 'features', // 'features' or 'positions'
+            learnFromHuman: true       // Whether to learn from human player
+        };
         const DEFAULT_WEIGHTS = {
             // Lower is better for these costs
             aggregateHeight: -0.510066,
@@ -522,6 +537,218 @@
             return board.map(row => row.slice());
         }
 
+        // -------- Markov Chain AI Implementation --------
+        function loadMarkovChains() {
+            try {
+                const saved = localStorage.getItem(MARKOV_STORAGE_KEY);
+                if (!saved) return initializeMarkovChains();
+                const parsed = JSON.parse(saved);
+                return parsed.chains ? parsed : initializeMarkovChains();
+            } catch (_) {
+                return initializeMarkovChains();
+            }
+        }
+
+        function saveMarkovChains(chains) {
+            try {
+                localStorage.setItem(MARKOV_STORAGE_KEY, JSON.stringify({
+                    chains: chains,
+                    lastUpdated: Date.now()
+                }));
+            } catch (_) {}
+        }
+
+        function initializeMarkovChains() {
+            return {
+                stateTransitions: new Map(),    // Map of state -> Map of actions -> probability
+                stateHistory: [],               // Recent state-action pairs
+                totalObservations: 0,
+                humanPatterns: new Map(),       // Map of state -> Map of actions -> count (from human player)
+                humanGamesObserved: 0          // Number of games learned from human
+            };
+        }
+
+        function simplifyBoardToState(board) {
+            // Convert board to a simplified state representation
+            const features = computeBoardFeatures(board);
+            
+            // Discretize features into ranges for state representation
+            const heightCategory = Math.floor(features.aggregateHeight / 20); // 0-19, 20-39, etc.
+            const holeCategory = Math.min(features.holes, 10); // 0-10+ holes
+            const bumpCategory = Math.floor(features.bumpiness / 5); // 0-4, 5-9, etc.
+            const lineCategory = features.completeLines; // 0, 1, 2, 3, 4
+            
+            return `h${heightCategory}_o${holeCategory}_b${bumpCategory}_l${lineCategory}`;
+        }
+
+        function actionToString(targetX, rotationIndex) {
+            return `${targetX}_${rotationIndex}`;
+        }
+
+        function updateMarkovChain(chains, prevState, action, currentState, reward) {
+            if (!chains.stateTransitions.has(prevState)) {
+                chains.stateTransitions.set(prevState, new Map());
+            }
+            
+            const actionMap = chains.stateTransitions.get(prevState);
+            if (!actionMap.has(action)) {
+                actionMap.set(action, { count: 0, totalReward: 0 });
+            }
+            
+            const actionData = actionMap.get(action);
+            actionData.count++;
+            actionData.totalReward += reward;
+            chains.totalObservations++;
+            
+            // Keep history limited
+            chains.stateHistory.push({ prevState, action, currentState, reward });
+            if (chains.stateHistory.length > MARKOV_DEFAULTS.stateHistorySize) {
+                chains.stateHistory.shift();
+            }
+            
+            saveMarkovChains(chains);
+        }
+
+        function selectMarkovAction(chains, currentState, possibleActions, useHumanPatterns = true) {
+            // Use human-learned patterns primarily
+            if (useHumanPatterns && Math.random() < MARKOV_DEFAULTS.humanMimicRate) {
+                // Try to use human-learned behavior
+                const humanAction = selectHumanLearnedAction(chains, currentState, possibleActions);
+                if (humanAction) return humanAction;
+            }
+            
+            // Check if we have data for this state
+            if (!chains.stateTransitions.has(currentState)) {
+                // If no data, try similar states or use best general patterns
+                return selectFromSimilarStates(chains, currentState, possibleActions);
+            }
+            
+            const actionMap = chains.stateTransitions.get(currentState);
+            let bestAction = null;
+            let bestScore = -Infinity;
+            
+            // Score each possible action based on historical performance
+            for (const action of possibleActions) {
+                if (actionMap.has(action) && actionMap.get(action).count >= MARKOV_DEFAULTS.minObservations) {
+                    const data = actionMap.get(action);
+                    const avgReward = data.totalReward / data.count;
+                    const confidence = Math.min(data.count / 20, 1); // Confidence based on observations
+                    const score = avgReward * confidence;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestAction = action;
+                    }
+                }
+            }
+            
+            // If no good historical data, try to use general human patterns
+            return bestAction || selectFromSimilarStates(chains, currentState, possibleActions);
+        }
+
+        function selectHumanLearnedAction(chains, currentState, possibleActions) {
+            // Prioritize actions that humans have taken in similar situations
+            if (!chains.humanPatterns) return null;
+            
+            const statePattern = chains.humanPatterns.get(currentState);
+            if (statePattern) {
+                // Return the most common human action for this state
+                let bestAction = null;
+                let bestCount = 0;
+                for (const [action, count] of statePattern.entries()) {
+                    if (possibleActions.includes(action) && count > bestCount) {
+                        bestCount = count;
+                        bestAction = action;
+                    }
+                }
+                return bestAction;
+            }
+            return null;
+        }
+
+        function selectFromSimilarStates(chains, currentState, possibleActions) {
+            // Find similar states and use their best actions
+            const stateFeatures = currentState.split('_');
+            let bestAction = null;
+            let bestScore = -Infinity;
+            
+            // Look for states with similar characteristics
+            for (const [state, actionMap] of chains.stateTransitions.entries()) {
+                const similarity = calculateStateSimilarity(currentState, state);
+                if (similarity > 0.7) {  // 70% similarity threshold
+                    for (const action of possibleActions) {
+                        if (actionMap.has(action)) {
+                            const data = actionMap.get(action);
+                            const avgReward = data.totalReward / data.count;
+                            const score = avgReward * similarity;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestAction = action;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Last resort: pick action that minimizes height and holes
+            if (!bestAction) {
+                bestAction = possibleActions[0];
+            }
+            return bestAction;
+        }
+
+        function calculateStateSimilarity(state1, state2) {
+            const features1 = state1.split('_').map(f => parseInt(f.slice(1)));
+            const features2 = state2.split('_').map(f => parseInt(f.slice(1)));
+            
+            if (features1.length !== features2.length) return 0;
+            
+            let similarity = 0;
+            for (let i = 0; i < features1.length; i++) {
+                const diff = Math.abs(features1[i] - features2[i]);
+                const maxDiff = i === 0 ? 10 : 5;  // Height has larger range
+                similarity += Math.max(0, 1 - diff / maxDiff);
+            }
+            
+            return similarity / features1.length;
+        }
+
+        function generateMarkovPossibleActions(board, pieceType) {
+            // Generate all possible actions (similar to genetic algorithm)
+            const baseShape = PIECES[pieceType];
+            const possibleActions = [];
+            
+            // Try all rotations
+            const rotations = [];
+            rotations.push(baseShape);
+            rotations.push(rotateShape(rotations[rotations.length - 1]));
+            rotations.push(rotateShape(rotations[rotations.length - 1]));
+            rotations.push(rotateShape(rotations[rotations.length - 1]));
+            
+            // Deduplicate rotations
+            const uniqueRotations = [];
+            const seen = new Set();
+            for (let i = 0; i < 4; i++) {
+                const key = JSON.stringify(rotations[i]);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    uniqueRotations.push({ shape: rotations[i], rotationIndex: i });
+                }
+            }
+            
+            // Try each rotation at each valid position
+            for (const rot of uniqueRotations) {
+                for (let x = 0; x <= BOARD_WIDTH - rot.shape[0].length; x++) {
+                    const sim = simulateLock(board, pieceType, rot.shape, x);
+                    if (sim) {
+                        possibleActions.push(actionToString(x, rot.rotationIndex));
+                    }
+                }
+            }
+            
+            return possibleActions;
+        }
+
         function simulateLock(board, pieceType, shape, startX) {
             // Drop shape from top at given x until collision
             // Find initial y as the first collision above
@@ -620,9 +847,10 @@
         }
 
         class Player {
-            constructor(id, isAI = false) {
+            constructor(id, isAI = false, aiType = 'genetic') {
                 this.id = id;
                 this.isAI = isAI;
+                this.aiType = aiType; // 'genetic', 'markov', or 'mixed'
                 this.board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(null));
                 this.currentPiece = null;
                 this.nextPiece = this.randomPiece();
@@ -648,6 +876,11 @@
                 this.aiWeights = null;
                 this.aiFitness = 0; // accumulate score proxy (score + lines bonus)
                 this.aiStepCooldown = 0; // spacing between actions (ms)
+                // Markov chain AI properties
+                this.markovChains = null;
+                this.lastMarkovState = null;
+                this.lastMarkovAction = null;
+                this.lastMarkovScore = 0;
             }
 
             init(canvas) {
@@ -665,12 +898,18 @@
                 this.currentPiece = new Piece(this.nextPiece);
                 this.nextPiece = this.randomPiece();
                 this.canHold = true;
+                this.pieceCount++;
                 
                 if (this.collides(this.currentPiece)) {
                     this.gameOver = true;
                 }
                 // Invalidate AI plan on new piece
                 this.aiPlan = null;
+                
+                // Track new piece for human learning
+                if (!this.isAI && MARKOV_DEFAULTS.learnFromHuman) {
+                    this.lastHumanState = simplifyBoardToState(this.board);
+                }
             }
 
             collides(piece, offsetX = 0, offsetY = 0) {
@@ -724,6 +963,10 @@
                         this.currentPiece.shape = oldShape;
                     }
                 }
+                // Track human rotations for Markov learning
+                if (!this.isAI && MARKOV_DEFAULTS.learnFromHuman) {
+                    this.trackHumanMove();
+                }
             }
 
             drop() {
@@ -740,6 +983,11 @@
 
             hardDrop() {
                 if (!this.currentPiece || this.gameOver) return;
+                
+                // Record human's final placement for Markov learning
+                if (!this.isAI && MARKOV_DEFAULTS.learnFromHuman) {
+                    this.recordHumanPlacement();
+                }
                 
                 let dropDistance = 0;
                 while (!this.collides(this.currentPiece, 0, 1)) {
@@ -1032,7 +1280,11 @@
                 // AI logic: plan and execute steps
                 if (this.isAI) {
                     if (!this.aiPlan) {
-                        this.aiPlan = this.planBestMove();
+                        if (this.aiType === 'genetic' || (this.aiType === 'mixed' && Math.random() < 0.5)) {
+                            this.aiPlan = this.planBestMove();
+                        } else if (this.aiType === 'markov' || this.aiType === 'mixed') {
+                            this.aiPlan = this.planMarkovMove();
+                        }
                     }
                     this.executePlannedStep();
                 }
@@ -1127,6 +1379,122 @@
 
                 return best;
             }
+
+            trackHumanMove() {
+                // Track intermediate moves for pattern learning
+                if (!this.currentPiece) return;
+                
+                const currentPos = {
+                    x: this.currentPiece.x,
+                    rotation: this.currentPiece.shape,
+                    pieceType: this.currentPiece.type
+                };
+                
+                this.humanMoveHistory.push(currentPos);
+            }
+            
+            recordHumanPlacement() {
+                // Record final placement decision by human player
+                if (!this.currentPiece || !this.lastHumanState) return;
+                
+                // Get shared Markov chains instance
+                const globalChains = game ? game.markovChains : loadMarkovChains();
+                if (!globalChains) return;
+                
+                // Determine the action taken (final position and rotation)
+                const finalX = this.currentPiece.x;
+                const rotationCount = this.humanMoveHistory.filter(m => 
+                    m.pieceType === this.currentPiece.type
+                ).length;
+                
+                // Simplified rotation index based on shape comparison
+                let rotationIndex = 0;
+                const baseShape = PIECES[this.currentPiece.type];
+                let testShape = baseShape;
+                for (let i = 0; i < 4; i++) {
+                    if (JSON.stringify(testShape) === JSON.stringify(this.currentPiece.shape)) {
+                        rotationIndex = i;
+                        break;
+                    }
+                    testShape = rotateShape(testShape);
+                }
+                
+                const action = actionToString(finalX, rotationIndex);
+                const currentState = simplifyBoardToState(this.board);
+                
+                // Record in human patterns
+                if (!globalChains.humanPatterns) {
+                    globalChains.humanPatterns = new Map();
+                }
+                
+                if (!globalChains.humanPatterns.has(this.lastHumanState)) {
+                    globalChains.humanPatterns.set(this.lastHumanState, new Map());
+                }
+                
+                const stateActions = globalChains.humanPatterns.get(this.lastHumanState);
+                const count = stateActions.get(action) || 0;
+                stateActions.set(action, count + 1);
+                
+                // Also update regular transitions with human data
+                const reward = this.lines * 200 + 100; // Assume human moves are good
+                updateMarkovChain(
+                    globalChains,
+                    this.lastHumanState,
+                    action,
+                    currentState,
+                    reward
+                );
+                
+                // Clear history for next piece
+                this.humanMoveHistory = [];
+                globalChains.humanGamesObserved++;
+                
+                // Save the updated chains
+                if (game) {
+                    game.markovChains = globalChains;
+                }
+                saveMarkovChains(globalChains);
+            }
+            
+            planMarkovMove() {
+                if (!this.currentPiece) return null;
+                
+                // Initialize Markov chains if not already done
+                if (!this.markovChains) {
+                    this.markovChains = game ? game.markovChains : loadMarkovChains();
+                }
+                
+                const currentState = simplifyBoardToState(this.board);
+                const pieceType = this.currentPiece.type;
+                const possibleActions = generateMarkovPossibleActions(this.board, pieceType);
+                
+                if (possibleActions.length === 0) return null;
+                
+                // Update chain with previous move if we have one
+                if (this.lastMarkovState && this.lastMarkovAction) {
+                    const reward = this.score - this.lastMarkovScore + (this.lines * 150);
+                    updateMarkovChain(
+                        this.markovChains, 
+                        this.lastMarkovState, 
+                        this.lastMarkovAction, 
+                        currentState, 
+                        reward
+                    );
+                }
+                
+                // Select action using Markov chain (prioritizing human-learned patterns)
+                const selectedAction = selectMarkovAction(this.markovChains, currentState, possibleActions, true);
+                const [targetXStr, rotationIndexStr] = selectedAction.split('_');
+                const targetX = parseInt(targetXStr);
+                const rotationIndex = parseInt(rotationIndexStr);
+                
+                // Store for next update
+                this.lastMarkovState = currentState;
+                this.lastMarkovAction = selectedAction;
+                this.lastMarkovScore = this.score;
+                
+                return { targetX, rotationIndex };
+            }
         }
 
         function clampX(x, shape) {
@@ -1137,15 +1505,18 @@
         }
 
         class Game {
-            constructor(playerCount) {
+            constructor(playerCount, aiType = 'genetic') {
                 this.players = [];
                 this.playerCount = playerCount;
+                this.aiType = aiType;
                 this.currentPlayer = 0;
                 this.running = false;
                 this.lastFrame = 0;
                 // GA state
                 this.gaState = loadAIWeights(); // { population, index, history }
                 this.sessionAIResults = [];
+                // Markov chains state - shared across all players for human learning
+                this.markovChains = loadMarkovChains();
             }
 
             init() {
@@ -1157,7 +1528,13 @@
                     const isMain = i === 0;
                     const isAI = i > 0;
                     
-                    const player = new Player(i, isAI);
+                    // For mixed mode, alternate between genetic and markov
+                    let playerAiType = this.aiType;
+                    if (this.aiType === 'mixed' && isAI) {
+                        playerAiType = (i % 2 === 1) ? 'genetic' : 'markov';
+                    }
+                    
+                    const player = new Player(i, isAI, playerAiType);
                     this.players.push(player);
                     
                     // Create player section
@@ -1168,7 +1545,12 @@
                     // Header
                     const header = document.createElement('div');
                     header.className = 'playerHeader';
-                    header.textContent = isMain ? 'YOU' : `CPU ${i}`;
+                    let headerText = isMain ? 'YOU' : `CPU ${i}`;
+                    if (!isMain) {
+                        const aiTypeLabel = playerAiType === 'genetic' ? '(GA)' : '(MC)';
+                        headerText += ` ${aiTypeLabel}`;
+                    }
+                    header.textContent = headerText;
                     section.appendChild(header);
                     
                     // Canvas
@@ -1221,11 +1603,16 @@
                     container.appendChild(section);
                     player.init(canvas);
 
-                    // Assign GA genomes to AI players
-                    if (isAI) {
+                    // Assign GA genomes to genetic AI players
+                    if (isAI && (playerAiType === 'genetic' || playerAiType === 'mixed')) {
                         const genome = this.nextGenome();
                         player.aiWeights = genome.weights;
                         player._genomeId = genome.id;
+                    }
+                    
+                    // Initialize Markov chains for Markov AI players
+                    if (isAI && (playerAiType === 'markov' || playerAiType === 'mixed')) {
+                        player.markovChains = this.markovChains || loadMarkovChains();
                     }
                 }
                 
@@ -1496,12 +1883,12 @@
         // Global game instance
         let game = null;
 
-        function startGame(playerCount) {
+        function startGame(playerCount, aiType = 'genetic') {
             document.getElementById('startMenu').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'flex';
             document.querySelector('.controls').style.display = 'block';
             
-            game = new Game(playerCount);
+            game = new Game(playerCount, aiType);
             game.init();
         }
     </script>
