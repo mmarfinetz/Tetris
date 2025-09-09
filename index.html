@@ -541,20 +541,78 @@
             try {
                 const saved = localStorage.getItem(MARKOV_STORAGE_KEY);
                 if (!saved) return initializeMarkovChains();
+                
                 const parsed = JSON.parse(saved);
-                return parsed.chains ? parsed : initializeMarkovChains();
-            } catch (_) {
+                if (!parsed || !parsed.chains) return initializeMarkovChains();
+                
+                // Reconstruct Maps from saved data
+                const chains = {
+                    stateTransitions: new Map(),
+                    stateHistory: parsed.chains.stateHistory || [],
+                    totalObservations: parsed.chains.totalObservations || 0,
+                    humanPatterns: new Map(),
+                    humanGamesObserved: parsed.chains.humanGamesObserved || 0
+                };
+                
+                // Restore stateTransitions Map if it exists
+                if (parsed.chains.stateTransitions) {
+                    for (const [state, actions] of Object.entries(parsed.chains.stateTransitions)) {
+                        chains.stateTransitions.set(state, new Map(Object.entries(actions)));
+                    }
+                }
+                
+                // Restore humanPatterns Map if it exists
+                if (parsed.chains.humanPatterns) {
+                    for (const [state, actions] of Object.entries(parsed.chains.humanPatterns)) {
+                        chains.humanPatterns.set(state, new Map(Object.entries(actions)));
+                    }
+                }
+                
+                return chains;
+            } catch (e) {
+                console.error('Error loading Markov chains:', e);
                 return initializeMarkovChains();
             }
         }
 
         function saveMarkovChains(chains) {
             try {
+                // Convert Maps to objects for JSON serialization
+                const serializable = {
+                    stateTransitions: {},
+                    stateHistory: chains.stateHistory || [],
+                    totalObservations: chains.totalObservations || 0,
+                    humanPatterns: {},
+                    humanGamesObserved: chains.humanGamesObserved || 0
+                };
+                
+                // Convert stateTransitions Map to object
+                if (chains.stateTransitions) {
+                    for (const [state, actionMap] of chains.stateTransitions.entries()) {
+                        serializable.stateTransitions[state] = {};
+                        for (const [action, data] of actionMap.entries()) {
+                            serializable.stateTransitions[state][action] = data;
+                        }
+                    }
+                }
+                
+                // Convert humanPatterns Map to object
+                if (chains.humanPatterns) {
+                    for (const [state, actionMap] of chains.humanPatterns.entries()) {
+                        serializable.humanPatterns[state] = {};
+                        for (const [action, count] of actionMap.entries()) {
+                            serializable.humanPatterns[state][action] = count;
+                        }
+                    }
+                }
+                
                 localStorage.setItem(MARKOV_STORAGE_KEY, JSON.stringify({
-                    chains: chains,
+                    chains: serializable,
                     lastUpdated: Date.now()
                 }));
-            } catch (_) {}
+            } catch (e) {
+                console.error('Error saving Markov chains:', e);
+            }
         }
 
         function initializeMarkovChains() {
@@ -689,8 +747,8 @@
                 }
             }
             
-            // Last resort: pick action that minimizes height and holes
-            if (!bestAction) {
+            // Last resort: pick first available action
+            if (!bestAction && possibleActions.length > 0) {
                 bestAction = possibleActions[0];
             }
             return bestAction;
@@ -1481,7 +1539,10 @@
                 const pieceType = this.currentPiece.type;
                 const possibleActions = generateMarkovPossibleActions(this.board, pieceType);
                 
-                if (possibleActions.length === 0) return null;
+                if (!possibleActions || possibleActions.length === 0) {
+                    console.warn('No possible actions for Markov AI');
+                    return null;
+                }
                 
                 // Update chain with previous move if we have one
                 if (this.lastMarkovState && this.lastMarkovAction) {
@@ -1898,12 +1959,22 @@
         let game = null;
 
         function startGame(playerCount, aiType = 'genetic') {
-            document.getElementById('startMenu').style.display = 'none';
-            document.getElementById('gameContainer').style.display = 'flex';
-            document.querySelector('.controls').style.display = 'block';
-            
-            game = new Game(playerCount, aiType);
-            game.init();
+            try {
+                console.log('Starting game with', playerCount, 'players, AI type:', aiType);
+                document.getElementById('startMenu').style.display = 'none';
+                document.getElementById('gameContainer').style.display = 'flex';
+                document.querySelector('.controls').style.display = 'block';
+                
+                game = new Game(playerCount, aiType);
+                game.init();
+            } catch (error) {
+                console.error('Error starting game:', error);
+                alert('Error starting game: ' + error.message);
+                // Reset UI on error
+                document.getElementById('startMenu').style.display = 'flex';
+                document.getElementById('gameContainer').style.display = 'none';
+                document.querySelector('.controls').style.display = 'none';
+            }
         }
     </script>
 </body>
