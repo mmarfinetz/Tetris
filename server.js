@@ -15,7 +15,6 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
 
 // Database setup
 const dbPath = path.join(__dirname, 'tournament.db');
@@ -760,6 +759,9 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'tournament-loader.html'));
 });
+
+// Serve static files AFTER custom routes
+app.use(express.static(path.join(__dirname)));
 
 // =====================================================
 // SERVER INITIALIZATION
