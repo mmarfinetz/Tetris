@@ -202,7 +202,7 @@
                     stats.maxScore = Math.max(stats.maxScore, score);
                     
                     // Check if eligible for tournament
-                    if (stats.maxScore >= 10000) {
+                    if (stats.maxScore >= 100000) {
                         enableTournamentSubmission(playerId, stats);
                     }
                 }

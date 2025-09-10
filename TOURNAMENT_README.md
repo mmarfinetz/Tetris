@@ -70,7 +70,7 @@ http://localhost:3000/tournament-loader.html
 ### Tournament Submission
 
 1. **Qualify for Tournament**: 
-   - Score 10,000+ points
+   - Score 100,000+ points
    - Play at least 5 games
 
 2. **Submit to Tournament**:

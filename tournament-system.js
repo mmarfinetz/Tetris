@@ -214,7 +214,7 @@ class TournamentSystem {
 
     // Check if genome qualifies for tournament
     canSubmitToTournament(genome) {
-        return genome.metadata.bestScore >= 10000 && 
+        return genome.metadata.bestScore >= 100000 && 
                genome.metadata.totalGamesPlayed >= 5;
     }
 
@@ -986,7 +986,7 @@ class TournamentUI {
             .sort((a, b) => b.metadata.bestScore - a.metadata.bestScore);
 
         if (genomes.length === 0) {
-            eligibleContainer.innerHTML = '<p>No genomes qualify yet. Score 10,000+ points!</p>';
+            eligibleContainer.innerHTML = '<p>No genomes qualify yet. Score 100,000+ points!</p>';
             document.getElementById('submit-best').disabled = true;
         } else {
             eligibleContainer.innerHTML = genomes.slice(0, 3).map(g => `

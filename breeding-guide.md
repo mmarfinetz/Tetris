@@ -5,7 +5,7 @@
 ### Phase 1: Build Your Base Population (Hours 0-2)
 1. Start the game with "4 Players (Genetic AI)"
 2. Let it run for ~100 generations
-3. Watch for genomes scoring 10,000+ consistently
+3. Watch for genomes scoring 100,000+ consistently
 
 ### Phase 2: Import Elite Champions (Hour 2)
 1. Press `Ctrl+T` to open tournament panel
@@ -16,7 +16,7 @@
    - Your population now has proven genetics
 
 ### Phase 3: Submit Your Best (Hour 3)
-1. When a genome scores 10,000+, submit it
+1. When a genome scores 100,000+, submit it
 2. It enters the next hourly tournament
 3. If it wins, it becomes an elite for others
 

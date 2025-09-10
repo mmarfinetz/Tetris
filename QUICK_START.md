@@ -56,7 +56,7 @@ That's it! No complex neural networks, just 4 simple weights that evolve.
 
 ## 🏆 How to Win Tournaments
 
-1. **Score 10,000+ points** to qualify
+1. **Score 100,000+ points** to qualify
 2. **Submit your best genome** (Ctrl+T)
 3. **Import elite champions** to improve
 4. **Mix strategies** from multiple winners
@@ -96,7 +96,7 @@ PORT=3001 npm start
 ```
 
 ### "Can't submit to tournament"
-- Score must be 10,000+
+- Score must be 100,000+
 - Server must be running
 - Check browser console (F12)
 
@@ -115,7 +115,7 @@ PORT=3001 npm start
 
 ## 🎯 Success Metrics
 
-- **Beginner**: 10,000 points
+- **Beginner**: 100,000 points
 - **Intermediate**: 25,000 points
 - **Advanced**: 50,000 points
 - **Elite**: 100,000+ points
