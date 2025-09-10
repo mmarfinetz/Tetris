@@ -9,6 +9,9 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Copy application files
 COPY server.js ./
 COPY *.html ./
