@@ -2306,6 +2306,11 @@
             endGame(winner) {
                 this.running = false;
                 
+                // Final update to population visualizer to mark dead genomes
+                if (this.populationVis) {
+                    this.populationVis.update(performance.now(), this.players);
+                }
+                
                 setTimeout(() => {
                     // Update GA fitness for assigned genomes
                     const aiPlayers = this.players.filter(p => p.isAI);
@@ -2318,6 +2323,11 @@
                             genome.assigned = false;
                         }
                     });
+                    
+                    // One more update after marking genomes as evaluated
+                    if (this.populationVis) {
+                        this.populationVis.update(performance.now(), this.players);
+                    }
 
                     // If all evaluated, evolve a new generation
                     if (this.gaState.population.every(g => g.evaluated)) {
