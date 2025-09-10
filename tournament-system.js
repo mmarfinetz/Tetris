@@ -1156,7 +1156,7 @@ class TournamentUI {
 }
 
 // Export for use in main game
-window.TetrisTourn ament = {
+window.TetrisTournament = {
     GenomeIdentifier,
     TournamentSystem,
     WeightVisualizer,
