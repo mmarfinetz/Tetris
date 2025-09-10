@@ -484,11 +484,13 @@
         };
 
         const GA_DEFAULTS = {
-            populationSize: 12,
+            populationSize: 50,
             tournamentSize: 3,
             mutationRate: 0.15,
-            mutationStrength: 0.08,
-            crossoverRate: 0.7
+            mutationStrength: 0.15,
+            crossoverRate: 0.7,
+            immigrationRate: 0.05,  // 5% chance per generation to add random genome
+            immigrationCount: 2     // Number of random genomes to inject
         };
 
         function loadAIWeights() {
@@ -2346,12 +2348,20 @@
 
             evolvePopulation() {
                 const pop = this.gaState.population.slice().sort((a, b) => b.fitness - a.fitness);
-                // Elitism: keep top 2
+                // Elitism: keep top 1 only (reduced from 2)
                 const next = [];
-                const eliteCount = Math.min(2, pop.length);
+                const eliteCount = Math.min(1, pop.length);
                 for (let i = 0; i < eliteCount; i++) {
                     next.push({ id: i, weights: { ...pop[i].weights }, fitness: 0, evaluated: false });
                 }
+                // Add immigration: inject random genomes to maintain diversity
+                if (Math.random() < GA_DEFAULTS.immigrationRate) {
+                    for (let i = 0; i < GA_DEFAULTS.immigrationCount && next.length < GA_DEFAULTS.populationSize; i++) {
+                        const randomWeights = mutateWeights({ ...DEFAULT_WEIGHTS }, 0.3); // Strong random mutation
+                        next.push({ id: next.length, weights: randomWeights, fitness: 0, evaluated: false });
+                    }
+                }
+                
                 // Fill rest with offspring via tournament selection + crossover + mutation
                 while (next.length < GA_DEFAULTS.populationSize) {
                     const parentA = tournamentSelect(pop);
