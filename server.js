@@ -773,12 +773,13 @@ const tournamentEngine = new TournamentEngine();
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`Tournament server running on port ${PORT}`);
-    console.log(`Access the game at http://localhost:${PORT}`);
+    console.log(`🎮 Tetris AI Tournament Server running on port ${PORT}`);
+    console.log(`🌐 Access the tournament system at http://localhost:${PORT}`);
+    console.log(`📊 Tournament system loaded with latest features`);
     
     // Start automated tournaments (every 60 minutes)
     setTimeout(() => {
-        console.log('Starting automated tournament system...');
+        console.log('🚀 Starting automated tournament system...');
         tournamentEngine.startScheduledTournaments(60);
     }, 5000);
 });
