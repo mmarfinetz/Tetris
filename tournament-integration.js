@@ -56,8 +56,9 @@
             // Track genomes in tournament system
             if (genomeIdentifier && state.population) {
                 state.population.forEach(genome => {
-                    if (!genomeHistory.has(genome.id)) {
-                        // New genome - register it
+                    // Ensure genome is registered and get its persistent ID
+                    let registeredId = genomeHistory.get(genome.id);
+                    if (!registeredId) {
                         const parentIds = genome.parentIds || [];
                         const registered = genomeIdentifier.registerGenome(
                             genome.weights || genome,
@@ -66,17 +67,17 @@
                             genome.mutationType,
                             genome.mutationDelta || 0
                         );
-                        
-                        genomeHistory.set(genome.id, registered.id);
-                        
-                        // Update performance if available
-                        if (genome.fitness > 0) {
-                            genomeIdentifier.updatePerformance(registered.id, {
-                                score: genome.fitness,
-                                lines: genome.lines || 0,
-                                survivalTime: genome.survivalTime || 0
-                            });
-                        }
+                        registeredId = registered.id;
+                        genomeHistory.set(genome.id, registeredId);
+                    }
+
+                    // Always update performance if we have fitness data
+                    if (genome.fitness > 0) {
+                        genomeIdentifier.updatePerformance(registeredId, {
+                            score: genome.fitness,
+                            lines: genome.lines || 0,
+                            survivalTime: genome.survivalTime || 0
+                        });
                     }
                 });
                 

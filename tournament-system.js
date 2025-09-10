@@ -204,9 +204,14 @@ class GenomeIdentifier {
 class TournamentSystem {
     constructor(genomeIdentifier) {
         this.genomeIdentifier = genomeIdentifier;
-        this.apiEndpoint = window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000/api' 
-            : '/api';
+        // Resolve API endpoint robustly for file://, localhost, and 127.0.0.1
+        this.apiEndpoint = (() => {
+            const { protocol, hostname } = window.location;
+            if (protocol === 'file:' || hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:3000/api';
+            }
+            return '/api';
+        })();
         this.submissionQueue = [];
         this.eliteGenomes = new Map();
         this.loadElites();
@@ -214,8 +219,8 @@ class TournamentSystem {
 
     // Check if genome qualifies for tournament
     canSubmitToTournament(genome) {
-        return genome.metadata.bestScore >= 100000 && 
-               genome.metadata.totalGamesPlayed >= 5;
+        // Qualify purely on score to match UI messaging
+        return genome.metadata.bestScore >= 100000;
     }
 
     // Submit genome to tournament
