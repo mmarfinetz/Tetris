@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris AI Tournament - Admin Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-header {
+            background: linear-gradient(90deg, #0ff, #00f);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+        }
+
+        .dashboard-header h1 {
+            color: #000;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .dashboard-header .status {
+            color: #000;
+            font-weight: bold;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #0ff;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.3);
+        }
+
+        .dashboard-card h2 {
+            color: #0ff;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 1px solid #0ff;
+            padding-bottom: 10px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            background: rgba(0, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .stat-item .label {
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .stat-item .value {
+            color: #0ff;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .genome-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .genome-table th {
+            background: rgba(0, 255, 255, 0.2);
+            padding: 10px;
+            text-align: left;
+            color: #0ff;
+        }
+
+        .genome-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .genome-table tr:hover {
+            background: rgba(0, 255, 255, 0.05);
+        }
+
+        .strategy-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .strategy-aggressive { background: #ff4444; color: #fff; }
+        .strategy-defensive { background: #4444ff; color: #fff; }
+        .strategy-balanced { background: #44ff44; color: #000; }
+        .strategy-smooth { background: #ffff44; color: #000; }
+        .strategy-hole { background: #ff44ff; color: #fff; }
+
+        .tournament-timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            position: relative;
+        }
+
+        .timeline-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0ff;
+            margin-right: 15px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .timeline-dot.completed { background: #00ff00; }
+        .timeline-dot.running { 
+            background: #ffff00; 
+            animation: pulse 2s infinite;
+        }
+        .timeline-dot.pending { background: #888; }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .timeline-content {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .weight-distribution {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .weight-bar {
+            flex: 1;
+            margin: 0 5px;
+            text-align: center;
+        }
+
+        .weight-bar .bar {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            height: 150px;
+            position: relative;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        .weight-bar .fill {
+            background: linear-gradient(0deg, #0ff, #00f);
+            transition: height 0.5s ease;
+        }
+
+        .weight-bar .label {
+            margin-top: 10px;
+            color: #0ff;
+            font-size: 0.9em;
+        }
+
+        .control-panel {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .control-panel h2 {
+            color: #0f0;
+            margin-bottom: 15px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-button {
+            background: linear-gradient(135deg, #00ff00, #00ff88);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .control-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        .control-button:disabled {
+            background: #555;
+            color: #999;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .control-button.danger {
+            background: linear-gradient(135deg, #ff0000, #ff8888);
+        }
+
+        .log-viewer {
+            background: #000;
+            border: 1px solid #0ff;
+            border-radius: 5px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+
+        .log-entry.info { color: #0ff; }
+        .log-entry.success { color: #0f0; }
+        .log-entry.warning { color: #ff0; }
+        .log-entry.error { color: #f00; }
+
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 2px solid #0ff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .refresh-indicator:hover {
+            transform: rotate(180deg);
+            background: rgba(0, 255, 255, 0.3);
+        }
+
+        .refresh-indicator.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .elite-showcase {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .elite-card {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05));
+            border: 2px solid #ffd700;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .elite-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+        }
+
+        .elite-card .rank {
+            font-size: 2em;
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+
+        .elite-card .nickname {
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .elite-card .score {
+            color: #0ff;
+            font-size: 1.2em;
+        }
+
+        .convergence-graph {
+            margin-top: 20px;
+            height: 200px;
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <h1>🏆 Tetris AI Tournament Admin Dashboard</h1>
+        <div class="status" id="server-status">Connecting to server...</div>
+    </div>
+
+    <div class="refresh-indicator" id="refresh-btn" title="Refresh Data">
+        🔄
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Overview Stats -->
+        <div class="dashboard-card">
+            <h2>📊 Overview</h2>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="label">Total Genomes</div>
+                    <div class="value" id="total-genomes">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">Tournaments Run</div>
+                    <div class="value" id="total-tournaments">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">Elite Genomes</div>
+                    <div class="value" id="elite-count">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">Avg Score</div>
+                    <div class="value" id="avg-score">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tournament Status -->
+        <div class="dashboard-card">
+            <h2>🎮 Tournament Status</h2>
+            <div class="tournament-timeline" id="tournament-timeline">
+                <!-- Timeline items will be added dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Elite Genomes Showcase -->
+    <div class="dashboard-card">
+        <h2>👑 Elite Champions</h2>
+        <div class="elite-showcase" id="elite-showcase">
+            <!-- Elite cards will be added dynamically -->
+        </div>
+    </div>
+
+    <!-- Strategy Distribution -->
+    <div class="dashboard-card">
+        <h2>🎯 Strategy Distribution</h2>
+        <div class="weight-distribution" id="weight-distribution">
+            <div class="weight-bar">
+                <div class="bar">
+                    <div class="fill" id="height-fill" style="height: 0%"></div>
+                </div>
+                <div class="label">Height</div>
+            </div>
+            <div class="weight-bar">
+                <div class="bar">
+                    <div class="fill" id="lines-fill" style="height: 0%"></div>
+                </div>
+                <div class="label">Lines</div>
+            </div>
+            <div class="weight-bar">
+                <div class="bar">
+                    <div class="fill" id="holes-fill" style="height: 0%"></div>
+                </div>
+                <div class="label">Holes</div>
+            </div>
+            <div class="weight-bar">
+                <div class="bar">
+                    <div class="fill" id="bump-fill" style="height: 0%"></div>
+                </div>
+                <div class="label">Bumpiness</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Submissions -->
+    <div class="dashboard-card">
+        <h2>📥 Recent Submissions</h2>
+        <table class="genome-table" id="recent-submissions">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nickname</th>
+                    <th>Score</th>
+                    <th>Strategy</th>
+                    <th>Generation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows will be added dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <h2>⚙️ Tournament Controls</h2>
+        <div class="control-buttons">
+            <button class="control-button" id="run-tournament">Run Tournament Now</button>
+            <button class="control-button" id="pause-tournaments">Pause Tournaments</button>
+            <button class="control-button" id="clear-queue">Clear Submission Queue</button>
+            <button class="control-button danger" id="reset-elites">Reset Elite Pool</button>
+            <button class="control-button" id="export-data">Export Data</button>
+            <button class="control-button" id="import-genomes">Import Genomes</button>
+        </div>
+        <div class="log-viewer" id="log-viewer">
+            <div class="log-entry info">System initialized...</div>
+        </div>
+    </div>
+
+    <script>
+        // Admin Dashboard JavaScript
+        class AdminDashboard {
+            constructor() {
+                this.apiEndpoint = window.location.hostname === 'localhost' 
+                    ? 'http://localhost:3000/api' 
+                    : '/api';
+                this.refreshInterval = null;
+                this.isRefreshing = false;
+                this.init();
+            }
+
+            init() {
+                this.attachEventListeners();
+                this.startAutoRefresh();
+                this.loadDashboardData();
+                this.checkServerStatus();
+            }
+
+            attachEventListeners() {
+                document.getElementById('refresh-btn').addEventListener('click', () => {
+                    this.loadDashboardData();
+                });
+
+                document.getElementById('run-tournament').addEventListener('click', () => {
+                    this.runTournament();
+                });
+
+                document.getElementById('pause-tournaments').addEventListener('click', () => {
+                    this.toggleTournaments();
+                });
+
+                document.getElementById('clear-queue').addEventListener('click', () => {
+                    this.clearQueue();
+                });
+
+                document.getElementById('reset-elites').addEventListener('click', () => {
+                    if (confirm('Are you sure you want to reset the elite pool? This cannot be undone.')) {
+                        this.resetElites();
+                    }
+                });
+
+                document.getElementById('export-data').addEventListener('click', () => {
+                    this.exportData();
+                });
+
+                document.getElementById('import-genomes').addEventListener('click', () => {
+                    this.importGenomes();
+                });
+            }
+
+            async checkServerStatus() {
+                try {
+                    const response = await fetch(`${this.apiEndpoint}/health`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        document.getElementById('server-status').textContent = 
+                            `Server Online - Last Check: ${new Date(data.timestamp).toLocaleTimeString()}`;
+                        document.getElementById('server-status').style.color = '#00ff00';
+                    } else {
+                        throw new Error('Server not responding');
+                    }
+                } catch (error) {
+                    document.getElementById('server-status').textContent = 'Server Offline';
+                    document.getElementById('server-status').style.color = '#ff0000';
+                }
+            }
+
+            async loadDashboardData() {
+                if (this.isRefreshing) return;
+                
+                this.isRefreshing = true;
+                const refreshBtn = document.getElementById('refresh-btn');
+                refreshBtn.classList.add('spinning');
+
+                try {
+                    // Load all data in parallel
+                    const [elites, distribution, schedule, recentTournaments] = await Promise.all([
+                        this.fetchEliteGenomes(),
+                        this.fetchWeightDistribution(),
+                        this.fetchTournamentSchedule(),
+                        this.fetchRecentTournaments()
+                    ]);
+
+                    this.updateOverviewStats(distribution);
+                    this.updateEliteShowcase(elites);
+                    this.updateWeightBars(distribution);
+                    this.updateTournamentTimeline(schedule, recentTournaments);
+                    this.updateRecentSubmissions();
+
+                    this.addLogEntry('Dashboard data refreshed', 'success');
+                } catch (error) {
+                    this.addLogEntry(`Error loading data: ${error.message}`, 'error');
+                } finally {
+                    this.isRefreshing = false;
+                    refreshBtn.classList.remove('spinning');
+                }
+            }
+
+            async fetchEliteGenomes() {
+                const response = await fetch(`${this.apiEndpoint}/genomes/elite`);
+                if (!response.ok) throw new Error('Failed to fetch elites');
+                return await response.json();
+            }
+
+            async fetchWeightDistribution() {
+                const response = await fetch(`${this.apiEndpoint}/strategies/distribution`);
+                if (!response.ok) throw new Error('Failed to fetch distribution');
+                return await response.json();
+            }
+
+            async fetchTournamentSchedule() {
+                const response = await fetch(`${this.apiEndpoint}/tournament/schedule`);
+                if (!response.ok) throw new Error('Failed to fetch schedule');
+                return await response.json();
+            }
+
+            async fetchRecentTournaments() {
+                // This would fetch recent tournament data
+                // For now, return mock data
+                return [];
+            }
+
+            updateOverviewStats(distribution) {
+                document.getElementById('total-genomes').textContent = distribution.total_genomes || 0;
+                document.getElementById('total-tournaments').textContent = '0'; // Would come from tournament data
+                document.getElementById('elite-count').textContent = 
+                    document.querySelectorAll('.elite-card').length;
+                
+                const avgScore = Math.round(
+                    (distribution.avg_height + distribution.avg_lines + 
+                     distribution.avg_holes + distribution.avg_bumpiness) * 1000
+                );
+                document.getElementById('avg-score').textContent = avgScore;
+            }
+
+            updateEliteShowcase(elites) {
+                const container = document.getElementById('elite-showcase');
+                container.innerHTML = '';
+
+                elites.slice(0, 6).forEach((elite, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'elite-card';
+                    card.innerHTML = `
+                        <div class="rank">#${index + 1}</div>
+                        <div class="nickname">${elite.metadata.nickname}</div>
+                        <div class="score">${elite.metadata.bestScore}</div>
+                        <div class="strategy-badge strategy-${this.getStrategyClass(elite.performance.strategy)}">
+                            ${elite.performance.strategy}
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            updateWeightBars(distribution) {
+                const maxVal = Math.max(
+                    Math.abs(distribution.avg_height),
+                    Math.abs(distribution.avg_lines),
+                    Math.abs(distribution.avg_holes),
+                    Math.abs(distribution.avg_bumpiness)
+                );
+
+                const heights = {
+                    'height-fill': Math.abs(distribution.avg_height) / maxVal * 100,
+                    'lines-fill': Math.abs(distribution.avg_lines) / maxVal * 100,
+                    'holes-fill': Math.abs(distribution.avg_holes) / maxVal * 100,
+                    'bump-fill': Math.abs(distribution.avg_bumpiness) / maxVal * 100
+                };
+
+                for (let [id, height] of Object.entries(heights)) {
+                    document.getElementById(id).style.height = `${height}%`;
+                }
+            }
+
+            updateTournamentTimeline(schedule, tournaments) {
+                const timeline = document.getElementById('tournament-timeline');
+                timeline.innerHTML = '';
+
+                // Add next tournament
+                const nextItem = document.createElement('div');
+                nextItem.className = 'timeline-item';
+                nextItem.innerHTML = `
+                    <div class="timeline-dot pending"></div>
+                    <div class="timeline-content">
+                        <strong>Next Tournament</strong><br>
+                        ${schedule.nextTournament}<br>
+                        Frequency: ${schedule.frequency}
+                    </div>
+                `;
+                timeline.appendChild(nextItem);
+
+                // Add recent tournaments
+                tournaments.forEach(tournament => {
+                    const item = document.createElement('div');
+                    item.className = 'timeline-item';
+                    item.innerHTML = `
+                        <div class="timeline-dot ${tournament.status}"></div>
+                        <div class="timeline-content">
+                            Tournament #${tournament.id}<br>
+                            ${tournament.participants} participants
+                        </div>
+                    `;
+                    timeline.appendChild(item);
+                });
+            }
+
+            async updateRecentSubmissions() {
+                // This would fetch recent submissions
+                // For now, create sample data
+                const tbody = document.querySelector('#recent-submissions tbody');
+                tbody.innerHTML = '';
+
+                // Add sample rows
+                for (let i = 0; i < 5; i++) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>TETRIS-${Math.random().toString(36).substr(2, 8).toUpperCase()}</td>
+                        <td>Bot_${Math.floor(Math.random() * 1000)}</td>
+                        <td>${Math.floor(Math.random() * 50000)}</td>
+                        <td><span class="strategy-badge strategy-balanced">balanced</span></td>
+                        <td>${Math.floor(Math.random() * 100)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+
+            getStrategyClass(strategy) {
+                const map = {
+                    'aggressive-line-clearer': 'aggressive',
+                    'height-manager': 'defensive',
+                    'hole-avoider': 'hole',
+                    'smooth-builder': 'smooth',
+                    'balanced': 'balanced'
+                };
+                return map[strategy] || 'balanced';
+            }
+
+            async runTournament() {
+                this.addLogEntry('Starting tournament...', 'info');
+                try {
+                    const response = await fetch(`${this.apiEndpoint}/tournament/run`, {
+                        method: 'POST'
+                    });
+                    if (response.ok) {
+                        this.addLogEntry('Tournament started successfully', 'success');
+                        setTimeout(() => this.loadDashboardData(), 2000);
+                    } else {
+                        throw new Error('Failed to start tournament');
+                    }
+                } catch (error) {
+                    this.addLogEntry(`Error: ${error.message}`, 'error');
+                }
+            }
+
+            toggleTournaments() {
+                const btn = document.getElementById('pause-tournaments');
+                if (btn.textContent === 'Pause Tournaments') {
+                    btn.textContent = 'Resume Tournaments';
+                    this.addLogEntry('Tournaments paused', 'warning');
+                } else {
+                    btn.textContent = 'Pause Tournaments';
+                    this.addLogEntry('Tournaments resumed', 'success');
+                }
+            }
+
+            clearQueue() {
+                this.addLogEntry('Submission queue cleared', 'info');
+            }
+
+            resetElites() {
+                this.addLogEntry('Elite pool reset', 'warning');
+                this.loadDashboardData();
+            }
+
+            exportData() {
+                // Generate CSV or JSON export
+                const data = {
+                    timestamp: new Date().toISOString(),
+                    genomes: [],
+                    tournaments: []
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                    type: 'application/json'
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tetris-tournament-data-${Date.now()}.json`;
+                a.click();
+                
+                this.addLogEntry('Data exported successfully', 'success');
+            }
+
+            importGenomes() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const data = JSON.parse(event.target.result);
+                                this.processImport(data);
+                            } catch (error) {
+                                this.addLogEntry(`Import failed: ${error.message}`, 'error');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                };
+                input.click();
+            }
+
+            processImport(data) {
+                // Process imported genome data
+                this.addLogEntry(`Imported ${data.genomes?.length || 0} genomes`, 'success');
+                this.loadDashboardData();
+            }
+
+            addLogEntry(message, type = 'info') {
+                const viewer = document.getElementById('log-viewer');
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                viewer.appendChild(entry);
+                viewer.scrollTop = viewer.scrollHeight;
+
+                // Keep only last 50 entries
+                while (viewer.children.length > 50) {
+                    viewer.removeChild(viewer.firstChild);
+                }
+            }
+
+            startAutoRefresh() {
+                this.refreshInterval = setInterval(() => {
+                    this.checkServerStatus();
+                    this.loadDashboardData();
+                }, 30000); // Refresh every 30 seconds
+            }
+
+            stopAutoRefresh() {
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+            }
+        }
+
+        // Initialize dashboard when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            window.dashboard = new AdminDashboard();
+        });
+    </script>
+</body>
+</html>

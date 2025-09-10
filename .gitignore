@@ -1,0 +1,25 @@
+CLAUDE.md
+
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+
+# OS
+.DS_Store
+
+# Coverage
+coverage
+.nyc_output
+
+# Build artifacts
+dist
+.vercel
+
+# Local DB and logs
+tournament.db
+*.log
