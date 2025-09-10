@@ -554,7 +554,7 @@
         }
 
         function evaluateBoardHeuristic(board) {
-            return evaluateBoardHeuristicWith(board, loadAIWeights());
+            return evaluateBoardHeuristicWith(board, DEFAULT_WEIGHTS);
         }
 
         function evaluateBoardHeuristicWith(board, w) {
@@ -1724,7 +1724,7 @@
                 let best = null;
                 let bestScore = -Infinity;
                 const board = this.board;
-                const weights = this.aiWeights || loadAIWeights();
+                const weights = this.aiWeights || DEFAULT_WEIGHTS;
 
                 for (const rot of uniqueRotations) {
                     const width = rot.shape[0].length;
