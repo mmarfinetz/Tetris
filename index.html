@@ -320,13 +320,14 @@
     <div id="startMenu">
         <h1 class="menuTitle">TETRIS BATTLE</h1>
         <div class="menuButtons">
-            <button class="menuButton" onclick="startGame(2, 'genetic')">2 Players (Genetic AI)</button>
-            <button class="menuButton" onclick="startGame(3, 'genetic')">3 Players (Genetic AI)</button>
             <button class="menuButton" onclick="startGame(4, 'genetic')">4 Players (Genetic AI)</button>
-            <button class="menuButton" onclick="startGame(2, 'markov')">2 Players (Markov Chain AI)</button>
-            <button class="menuButton" onclick="startGame(3, 'markov')">3 Players (Markov Chain AI)</button>
             <button class="menuButton" onclick="startGame(4, 'markov')">4 Players (Markov Chain AI)</button>
-            <button class="menuButton" onclick="startGame(2, 'mixed')">2 Players (Mixed AI)</button>
+            <button class="menuButton" onclick="startGame(4, 'mixed')">4 Players (Mixed AI)</button>
+            <button class="menuButton" onclick="startGame(4, 'versus')">4 Players (AI vs AI: Markov vs Genetic)</button>
+        </div>
+        <div style="margin-top: 16px; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+            <input id="togglePowerUps" type="checkbox" checked style="transform: scale(1.2);" />
+            <label for="togglePowerUps">Enable Power-ups</label>
         </div>
     </div>
 
@@ -1129,11 +1130,16 @@
                 this.humanMoveHistory = [];
                 this.lastHumanState = null;
                 this.pieceCount = 0;
+                // Benchmarking
+                this.piecesPlaced = 0;        // counts completed placements
+                this.benchmarkStartMs = 0;    // timestamp when counting starts
             }
 
             init(canvas) {
                 this.canvas = canvas;
                 this.ctx = canvas.getContext('2d');
+                // Start PPS benchmark clock
+                this.benchmarkStartMs = Date.now();
                 this.spawnPiece();
             }
 
@@ -1264,6 +1270,8 @@
                 }
                 
                 this.clearLines();
+                // Count this completed placement for PPS benchmarking
+                this.piecesPlaced++;
                 this.spawnPiece();
             }
 
@@ -1294,8 +1302,8 @@
                     this.level = Math.floor(this.lines / 10) + 1;
                     this.dropTime = Math.max(100, 1000 - (this.level - 1) * 100);
                     
-                    // Power-up chance
-                    if (this.lines % 5 === 0) {
+                    // Power-up chance (only when enabled)
+                    if (game && game.powerUpsEnabled && this.lines % 5 === 0) {
                         this.addRandomPowerUp();
                     }
                 } else {
@@ -1304,6 +1312,7 @@
             }
 
             addRandomPowerUp() {
+                if (!game || !game.powerUpsEnabled) return;
                 if (this.powerUps.length >= 3) return;
                 
                 const types = IMPLEMENTED_POWERUPS;
@@ -1312,6 +1321,7 @@
             }
 
             usePowerUp(index, targetId) {
+                if (!game || !game.powerUpsEnabled) return;
                 if (index >= this.powerUps.length) return;
                 
                 const powerUp = this.powerUps[index];
@@ -1330,6 +1340,7 @@
             }
 
             applyPowerUp(type, targetId) {
+                if (!game || !game.powerUpsEnabled) return;
                 const target = game.players.find(p => p.id === targetId);
                 if (!target && POWERUPS[type].type === 'offensive') return;
                 
@@ -1556,10 +1567,7 @@
                 if (!this._lastAIStep) this._lastAIStep = 0;
                 
                 // Consistent AI speed for all AI types - no level-based acceleration for fairness
-                let stepDelay = 120; // Fixed delay for all AIs
-                if (this.aiType === 'markov') {
-                    stepDelay = 100; // Slightly faster for Markov to compensate for weaker play
-                }
+                const stepDelay = 100; // Shared delay for GA and Markov
                 
                 if (now - this._lastAIStep < stepDelay) return;
                 this._lastAIStep = now;
@@ -1592,8 +1600,8 @@
                 this._aiRotationProgress = 0;
                 this.aiPlan = null;
 
-                // Occasionally use a power-up if available
-                if (this.powerUps.length > 0 && Math.random() < 0.15) {
+                // Occasionally use a power-up if available (only when enabled)
+                if (game && game.powerUpsEnabled && this.powerUps.length > 0 && Math.random() < 0.15) {
                     const targets = game.players.filter(p => p.id !== this.id && !p.gameOver);
                     if (targets.length > 0) {
                         const target = targets[Math.floor(Math.random() * targets.length)];
@@ -1841,10 +1849,11 @@
         }
 
         class Game {
-            constructor(playerCount, aiType = 'genetic') {
+            constructor(playerCount, aiType = 'genetic', powerUpsEnabled = true) {
                 this.players = [];
                 this.playerCount = playerCount;
                 this.aiType = aiType;
+                this.powerUpsEnabled = powerUpsEnabled;
                 this.currentPlayer = 0;
                 this.running = false;
                 this.lastFrame = 0;
@@ -1861,12 +1870,16 @@
                 container.innerHTML = '';
                 
                 for (let i = 0; i < this.playerCount; i++) {
-                    const isMain = i === 0;
-                    const isAI = i > 0;
+                    const versusMode = this.aiType === 'versus';
+                    const isMain = (i === 0) && !versusMode;
+                    const isAI = versusMode ? true : i > 0;
                     
                     // For mixed mode, alternate between genetic and markov
                     let playerAiType = this.aiType;
-                    if (this.aiType === 'mixed' && isAI) {
+                    if (versusMode) {
+                        const split = Math.floor(this.playerCount / 2);
+                        playerAiType = (i < split) ? 'genetic' : 'markov';
+                    } else if (this.aiType === 'mixed' && isAI) {
                         playerAiType = (i % 2 === 1) ? 'genetic' : 'markov';
                     }
                     
@@ -1904,15 +1917,19 @@
                     // Stats
                     const stats = document.createElement('div');
                     stats.className = 'stats';
-                    stats.innerHTML = `
+                    let statsHTML = `
                         <div><span>Score:</span> <span id="score${i}">0</span></div>
                         <div><span>Lines:</span> <span id="lines${i}">0</span></div>
                         <div><span>Level:</span> <span id="level${i}">1</span></div>
                     `;
+                    if (isAI) {
+                        statsHTML += `<div><span>PPS:</span> <span id="pps${i}">0.00</span></div>`;
+                    }
+                    stats.innerHTML = statsHTML;
                     section.appendChild(stats);
                     
-                    // Power-ups (only for main player)
-                    if (isMain) {
+                    // Power-ups UI (only for main player and only if enabled)
+                    if (isMain && this.powerUpsEnabled) {
                         const powerUpsDiv = document.createElement('div');
                         powerUpsDiv.className = 'powerUpsContainer';
                         powerUpsDiv.id = 'powerUps';
@@ -1953,8 +1970,8 @@
                     }
                 }
                 
-                // Set initial target
-                if (this.players.length > 1) {
+                // Set initial target for human player only
+                if (this.players.length > 1 && !this.players[0].isAI) {
                     this.players[0].target = 1;
                 }
                 
@@ -2021,6 +2038,7 @@
                         case '1':
                         case '2':
                         case '3':
+                            if (!this.powerUpsEnabled) break;
                             const index = parseInt(e.key) - 1;
                             if (player.powerUps[index]) {
                                 player.usePowerUp(index, player.target);
@@ -2028,6 +2046,7 @@
                             }
                             break;
                         case 'Tab':
+                            if (!this.powerUpsEnabled) break;
                             e.preventDefault();
                             const targets = this.players.filter(p => p.id !== 0 && !p.gameOver);
                             if (targets.length > 0) {
@@ -2130,10 +2149,16 @@
                     const scoreEl = document.getElementById(`score${player.id}`);
                     const linesEl = document.getElementById(`lines${player.id}`);
                     const levelEl = document.getElementById(`level${player.id}`);
+                    const ppsEl = document.getElementById(`pps${player.id}`);
                     
                     if (scoreEl) scoreEl.textContent = player.score;
                     if (linesEl) linesEl.textContent = player.lines;
                     if (levelEl) levelEl.textContent = player.level;
+                    if (ppsEl && player.benchmarkStartMs) {
+                        const elapsedSec = Math.max((Date.now() - player.benchmarkStartMs) / 1000, 0.001);
+                        const pps = player.piecesPlaced / elapsedSec;
+                        ppsEl.textContent = pps.toFixed(2);
+                    }
                 });
             }
 
@@ -2151,7 +2176,7 @@
                 
                 // Update UI
                 this.updateStats();
-                this.updatePowerUps();
+                if (this.powerUpsEnabled) this.updatePowerUps();
                 
                 // Check for game over
                 const alivePlayers = this.players.filter(p => !p.gameOver);
@@ -2225,9 +2250,11 @@
                 console.log('Starting game with', playerCount, 'players, AI type:', aiType);
                 document.getElementById('startMenu').style.display = 'none';
                 document.getElementById('gameContainer').style.display = 'flex';
-                document.querySelector('.controls').style.display = 'block';
+                // Hide controls in AI-vs-AI mode
+                document.querySelector('.controls').style.display = (aiType === 'versus') ? 'none' : 'block';
                 
-                game = new Game(playerCount, aiType);
+                const powerUpsEnabled = document.getElementById('togglePowerUps') ? document.getElementById('togglePowerUps').checked : true;
+                game = new Game(playerCount, aiType, powerUpsEnabled);
                 game.init();
             } catch (error) {
                 console.error('Error starting game:', error);
