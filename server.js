@@ -776,6 +776,7 @@ app.listen(PORT, () => {
     console.log(`🎮 Tetris AI Tournament Server running on port ${PORT}`);
     console.log(`🌐 Access the tournament system at http://localhost:${PORT}`);
     console.log(`📊 Tournament system loaded with latest features`);
+    console.log(`🏆 Deployment from tournament-system-main branch`);
     
     // Start automated tournaments (every 60 minutes)
     setTimeout(() => {
