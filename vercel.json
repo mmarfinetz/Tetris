@@ -2,6 +2,10 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/tournament-loader.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://tetris-backend-production.up.railway.app/api/$1"
     }

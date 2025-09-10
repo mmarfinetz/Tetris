@@ -821,9 +821,24 @@
             }
         }
 
+        // Admin authentication
+        function checkAdminAccess() {
+            const adminPassword = prompt('Enter admin password:');
+            const correctPassword = 'TetrisAdmin2024!'; // Change this to your desired password
+            
+            if (adminPassword !== correctPassword) {
+                alert('Access denied. Unauthorized access is not permitted.');
+                window.location.href = 'tournament-loader.html';
+                return false;
+            }
+            return true;
+        }
+
         // Initialize dashboard when page loads
         window.addEventListener('DOMContentLoaded', () => {
-            window.dashboard = new AdminDashboard();
+            if (checkAdminAccess()) {
+                window.dashboard = new AdminDashboard();
+            }
         });
     </script>
 </body>

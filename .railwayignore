@@ -1,0 +1,28 @@
+# Frontend files - should only be deployed to Vercel
+*.html
+*.css
+*.js
+!server.js
+!tournament-system.js
+!tournament-integration.js
+
+# Development files
+ga_visualization.html
+CLAUDE.md
+breeding-guide.md
+README.md
+DEPLOYMENT.md
+QUICK_START.md
+TOURNAMENT_README.md
+
+# Scripts
+start-tournament.sh
+start-tournament.bat
+test-tournament.js
+
+# Vercel config
+vercel.json
+
+# Git
+.git/
+.gitignore

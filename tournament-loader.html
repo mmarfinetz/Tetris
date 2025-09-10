@@ -176,12 +176,16 @@
             <a href="index.html" class="btn" id="play-btn" style="display: none;">
                 🎮 Play Tetris
             </a>
-            <a href="admin-dashboard.html" class="btn admin" id="admin-btn" style="display: none;">
-                📊 Admin Dashboard
-            </a>
             <button class="btn secondary" id="setup-btn" style="display: none;">
                 ⚙️ Setup Server
             </button>
+        </div>
+
+        <!-- Hidden admin access - only visible with special key combination -->
+        <div id="admin-access" style="display: none; margin-top: 20px;">
+            <a href="admin-dashboard.html" class="btn admin">
+                📊 Admin Dashboard
+            </a>
         </div>
 
         <div class="instructions" style="display: none;" id="instructions">
@@ -235,9 +239,7 @@
                 document.getElementById('play-btn').style.display = 'inline-block';
             }
             
-            if (serverOnline) {
-                document.getElementById('admin-btn').style.display = 'inline-block';
-            } else {
+            if (!serverOnline) {
                 document.getElementById('setup-btn').style.display = 'inline-block';
                 document.getElementById('instructions').style.display = 'block';
             }
@@ -279,6 +281,17 @@
         // Setup server button
         document.getElementById('setup-btn').addEventListener('click', () => {
             alert('Please run the following commands in your terminal:\n\n1. npm install\n2. npm start\n\nThen refresh this page.');
+        });
+
+        // Secret admin access (Ctrl+Alt+A)
+        let adminKeySequence = [];
+        const adminKeys = ['Control', 'Alt', 'KeyA'];
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyA' && e.ctrlKey && e.altKey) {
+                document.getElementById('admin-access').style.display = 'block';
+                console.log('Admin access revealed');
+            }
         });
 
         // Initialize on load
