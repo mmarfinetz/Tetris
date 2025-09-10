@@ -2459,9 +2459,10 @@
                             item.sim.lines = activePlayer.lines;
                             item.sim.steps = activePlayer.piecesPlaced || 0;
                         }
-                    } else if (item.genome.evaluated && !item.dead && item.genome.assigned) {
-                        // Only mark as dead if it was actually assigned to a player this session
-                        // This prevents marking genomes from previous sessions as dead
+                    } else if (item.genome.evaluated && !item.dead) {
+                        // Mark as dead if genome has been evaluated (finished playing)
+                        // Removed the item.genome.assigned check since it gets set to false
+                        // after evaluation, which was preventing proper dead marking
                         item.dead = true;
                         item.card.classList.add('dead');
                     }
