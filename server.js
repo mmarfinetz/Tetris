@@ -15,11 +15,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// Only serve static files in development
-if (process.env.NODE_ENV === 'development') {
-    app.use(express.static(path.join(__dirname)));
-}
+app.use(express.static(path.join(__dirname)));
 
 // Database setup
 const dbPath = path.join(__dirname, 'tournament.db');
@@ -760,20 +756,9 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Root endpoint - backend API only
+// Root endpoint - serve tournament system
 app.get('/', (req, res) => {
-    res.json({
-        name: 'Tetris AI Tournament Backend',
-        version: '1.0.0',
-        description: 'Backend API for Tetris AI Tournament System',
-        frontend: 'https://tetris-tournament.vercel.app',
-        endpoints: {
-            health: '/api/health',
-            genomes: '/api/genomes',
-            tournaments: '/api/tournaments',
-            strategies: '/api/strategies'
-        }
-    });
+    res.sendFile(path.join(__dirname, 'tournament-loader.html'));
 });
 
 // =====================================================
