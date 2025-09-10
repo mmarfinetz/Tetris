@@ -1420,12 +1420,21 @@
                 switch (type) {
                     case 'GARBAGE':
                         if (target) {
+                            // Add garbage lines properly by pushing existing pieces up
                             for (let i = 0; i < 3; i++) {
                                 const garbageLine = Array(BOARD_WIDTH).fill('garbage');
                                 const hole = Math.floor(Math.random() * BOARD_WIDTH);
                                 garbageLine[hole] = null;
-                                target.board.push(garbageLine);
+                                
+                                // Remove top row and add garbage at bottom
+                                // This pushes all pieces up
                                 target.board.shift();
+                                target.board.push(garbageLine);
+                                
+                                // Check if pieces reached the top (game over condition)
+                                if (target.board[0].some(cell => cell !== null)) {
+                                    target.gameOver = true;
+                                }
                             }
                             this.showAttackEffect(target, 'GARBAGE!');
                         }
@@ -1469,7 +1478,7 @@
                     case 'ELIMINATE':
                         game.players.forEach(p => {
                             if (p.id !== this.id && !p.gameOver) {
-                                // Add 3 rows of random garbage to target
+                                // Add 3 rows of garbage properly by pushing existing pieces up
                                 for (let i = 0; i < 3; i++) {
                                     const stackLine = Array(BOARD_WIDTH).fill('garbage');
                                     // Create 2-3 random holes per line for fairness
@@ -1478,8 +1487,16 @@
                                         const hole = Math.floor(Math.random() * BOARD_WIDTH);
                                         stackLine[hole] = null;
                                     }
-                                    p.board.push(stackLine);
+                                    
+                                    // Remove top row and add garbage at bottom
+                                    // This pushes all pieces up
                                     p.board.shift();
+                                    p.board.push(stackLine);
+                                    
+                                    // Check if pieces reached the top (game over condition)
+                                    if (p.board[0].some(cell => cell !== null)) {
+                                        p.gameOver = true;
+                                    }
                                 }
                                 this.showAttackEffect(p, 'STACKED!');
                             }
