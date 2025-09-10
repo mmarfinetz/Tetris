@@ -15,7 +15,9 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            overflow: hidden;
+            /* Allow vertical scrolling so the population panel can sit below */
+            overflow-x: hidden;
+            overflow-y: auto;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -313,6 +315,72 @@
                 width: 90%;
                 font-size: 10px;
             }
+        }
+
+        /* Population preview panel (mini transparent boards) */
+        #populationPanel {
+            flex-basis: 100%;
+            max-width: 1400px;
+            width: 100%;
+            margin-top: 8px;
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 12px;
+            padding: 12px 12px 16px 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+        }
+        .populationHeader {
+            font-weight: 700;
+            font-size: 16px;
+            opacity: 0.9;
+            margin: 2px 0 10px 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .populationGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        .miniCard {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .miniCard:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+        }
+        .miniCard.dead {
+            border-color: rgba(255,50,50,0.4);
+            opacity: 0.6;
+            background: rgba(40,10,10,0.3);
+        }
+        .miniLabel {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-bottom: 6px;
+        }
+        .miniStats {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 6px;
+        }
+        canvas.mini {
+            display: block;
+            image-rendering: pixelated;
+            width: 100px;
+            height: 200px;
+            opacity: 0.85;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: radial-gradient(120px 240px at 50% 50%, rgba(255,255,255,0.06), rgba(0,0,0,0.25));
         }
     </style>
 </head>
@@ -1862,6 +1930,8 @@
                 this.sessionAIResults = [];
                 // Markov chains state - shared across all players for human learning
                 this.markovChains = loadMarkovChains();
+                // Optional GA population preview UI
+                this.populationVis = null;
             }
 
             init() {
@@ -1968,6 +2038,27 @@
                     if (isAI && (playerAiType === 'markov' || playerAiType === 'mixed')) {
                         player.markovChains = this.markovChains || loadMarkovChains();
                     }
+                }
+
+                // In AI vs AI mode, render GA population preview with mini boards under the main boards
+                if (this.aiType === 'versus') {
+                    const containerEl = document.getElementById('gameContainer');
+                    let panel = document.getElementById('populationPanel');
+                    if (!panel) {
+                        panel = document.createElement('div');
+                        panel.id = 'populationPanel';
+                        containerEl.appendChild(panel);
+                    }
+                    panel.innerHTML = '';
+                    const header = document.createElement('div');
+                    header.className = 'populationHeader';
+                    header.innerHTML = `<span>🧬 Genetic Population Preview</span><span style="font-weight:400;opacity:.8">(live)</span>`;
+                    const grid = document.createElement('div');
+                    grid.className = 'populationGrid';
+                    panel.appendChild(header);
+                    panel.appendChild(grid);
+
+                    this.populationVis = new PopulationVisualizer(grid, this.gaState.population);
                 }
                 
                 // Set initial target for human player only
@@ -2177,6 +2268,7 @@
                 // Update UI
                 this.updateStats();
                 if (this.powerUpsEnabled) this.updatePowerUps();
+                if (this.populationVis) this.populationVis.update(timestamp, this.players);
                 
                 // Check for game over
                 const alivePlayers = this.players.filter(p => !p.gameOver);
@@ -2239,6 +2331,201 @@
                 this.gaState.population = next;
                 this.gaState.index = 0;
                 this.gaState.history.push({ ts: Date.now(), bestFitness: pop[0]?.fitness || 0 });
+                if (this.populationVis) this.populationVis.rebuild(this.gaState.population);
+            }
+        }
+
+        // --- Population Visualizer: render live mini transparent boards for GA ---
+        function createEmptyBoard() {
+            return Array.from({ length: BOARD_HEIGHT }, () => Array(BOARD_WIDTH).fill(null));
+        }
+        function randomPieceType() {
+            const keys = Object.keys(PIECES);
+            return keys[Math.floor(Math.random() * keys.length)];
+        }
+
+        class PopulationVisualizer {
+            constructor(rootEl, population) {
+                this.root = rootEl;
+                this.population = population.slice();
+                this.items = []; // { genome, canvas, ctx, sim, dead }
+                this.lastStep = 0;
+                this.intervalMs = 100; // Faster step rate for more responsive updates
+                this.activeGenomes = new Map(); // Track active genome IDs -> player mapping
+                this._build();
+            }
+            rebuild(newPopulation) {
+                this.population = newPopulation.slice();
+                this._build();
+            }
+            _build() {
+                this.root.innerHTML = '';
+                this.items = [];
+                this.population.forEach(genome => {
+                    const card = document.createElement('div');
+                    card.className = 'miniCard';
+
+                    const label = document.createElement('div');
+                    label.className = 'miniLabel';
+                    label.textContent = `Genome ${genome.id}`;
+                    card.appendChild(label);
+
+                    const canvas = document.createElement('canvas');
+                    // Keep internal res small; CSS scales
+                    canvas.width = BOARD_WIDTH * 10;
+                    canvas.height = BOARD_HEIGHT * 10;
+                    canvas.className = 'mini';
+                    card.appendChild(canvas);
+
+                    const stats = document.createElement('div');
+                    stats.className = 'miniStats';
+                    stats.textContent = 'lines 0 · steps 0';
+                    card.appendChild(stats);
+
+                    this.root.appendChild(card);
+
+                    this.items.push({
+                        genome,
+                        canvas,
+                        ctx: canvas.getContext('2d'),
+                        statsEl: stats,
+                        card,
+                        dead: false,
+                        sim: {
+                            board: createEmptyBoard(),
+                            nextPiece: null,
+                            steps: 0,
+                            lines: 0
+                        }
+                    });
+                });
+            }
+            update(ts, players = null) {
+                // Update genome status from active players in real-time
+                if (players) {
+                    this._updateGenomeStatus(players);
+                }
+                
+                if (!this.lastStep) this.lastStep = ts;
+                const shouldStep = ts - this.lastStep >= this.intervalMs;
+                if (shouldStep) this.lastStep = ts;
+                
+                this.items.forEach(it => {
+                    // Skip dead genomes from simulation but still draw them
+                    if (!it.dead && shouldStep) {
+                        this._stepSim(it);
+                    }
+                    this._drawItem(it);
+                    
+                    // Update stats with real data if available
+                    if (it.dead) {
+                        it.statsEl.innerHTML = `<span style="color:#ff4444">ELIMINATED</span>`;
+                    } else if (it.genome.evaluated) {
+                        it.statsEl.innerHTML = `<span style="color:#44ff44">fitness ${it.genome.fitness || 0}</span>`;
+                    } else {
+                        it.statsEl.textContent = `lines ${it.sim.lines} · steps ${it.sim.steps}`;
+                    }
+                });
+            }
+            
+            _updateGenomeStatus(players) {
+                // Track which genomes are actively playing
+                const activePlayers = players.filter(p => p.isAI && p._genomeId !== undefined);
+                
+                this.items.forEach(item => {
+                    const activePlayer = activePlayers.find(p => p._genomeId === item.genome.id);
+                    
+                    if (activePlayer) {
+                        // Genome is actively playing
+                        if (activePlayer.gameOver && !item.dead) {
+                            // Just died - mark as dead immediately
+                            item.dead = true;
+                            item.card.classList.add('dead');
+                            // Update the actual genome fitness immediately
+                            item.genome.fitness = activePlayer.score + activePlayer.lines * 150;
+                            item.genome.evaluated = true;
+                        } else if (!activePlayer.gameOver) {
+                            // Still playing - update live stats
+                            item.sim.lines = activePlayer.lines;
+                            item.sim.steps = activePlayer.piecesPlaced || 0;
+                        }
+                    } else if (item.genome.evaluated && !item.dead) {
+                        // Previously evaluated but not marked dead
+                        item.dead = true;
+                        item.card.classList.add('dead');
+                    }
+                });
+            }
+            _stepSim(item) {
+                const { sim, genome } = item;
+                // choose piece
+                const pieceType = sim.nextPiece || randomPieceType();
+                sim.nextPiece = randomPieceType();
+                // generate possible actions (reuse helpers)
+                const actions = generateMarkovPossibleActions(sim.board, pieceType);
+                if (!actions || actions.length === 0) {
+                    // If no moves, reset the board for this mini to keep animation going
+                    item.sim.board = createEmptyBoard();
+                    return;
+                }
+                // Score each action using genome weights
+                let best = null;
+                let bestScore = -Infinity;
+                for (const a of actions) {
+                    const res = evaluatePlacement(sim.board, pieceType, a, genome.weights);
+                    if (!res) continue;
+                    if (res.score > bestScore) {
+                        bestScore = res.score;
+                        best = { action: a, cleared: res.cleared };
+                    }
+                }
+                if (!best) return;
+                const { x, rotationIndex } = parseActionString(best.action);
+                const shape = getRotatedShape(pieceType, rotationIndex);
+                const applied = simulateLock(sim.board, pieceType, shape, x);
+                if (applied) {
+                    sim.board = applied.board;
+                    sim.lines += applied.cleared || 0;
+                }
+                sim.steps++;
+            }
+            _drawItem(item) {
+                const { ctx, canvas, sim, dead } = item;
+                const w = canvas.width;
+                const h = canvas.height;
+                const bs = Math.floor(w / BOARD_WIDTH);
+                // Clear and set background based on status
+                ctx.clearRect(0, 0, w, h);
+                if (dead) {
+                    ctx.fillStyle = 'rgba(100,0,0,0.3)'; // Red tint for dead genomes
+                } else {
+                    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                }
+                ctx.fillRect(0, 0, w, h);
+                // Grid fade
+                ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+                ctx.lineWidth = 1;
+                for (let x = 0; x <= BOARD_WIDTH; x++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x * bs + 0.5, 0);
+                    ctx.lineTo(x * bs + 0.5, h);
+                    ctx.stroke();
+                }
+                for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y * bs + 0.5);
+                    ctx.lineTo(w, y * bs + 0.5);
+                    ctx.stroke();
+                }
+                // Draw blocks
+                for (let y = 0; y < BOARD_HEIGHT; y++) {
+                    for (let x = 0; x < BOARD_WIDTH; x++) {
+                        const cell = sim.board[y][x];
+                        if (!cell) continue;
+                        ctx.fillStyle = cell === 'garbage' ? 'rgba(160,160,160,0.9)' : COLORS[cell] || '#999';
+                        ctx.fillRect(x * bs + 1, y * bs + 1, bs - 2, bs - 2);
+                    }
+                }
             }
         }
 
