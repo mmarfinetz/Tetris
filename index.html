@@ -497,6 +497,11 @@
                 if (!saved) return { population: seedPopulation(), index: 0, history: [] };
                 const parsed = JSON.parse(saved);
                 if (!parsed.population) return { population: seedPopulation(), index: 0, history: [] };
+                // Reset evaluation status for new game session
+                parsed.population.forEach(genome => {
+                    genome.evaluated = false;
+                    genome.assigned = false;
+                });
                 return parsed;
             } catch (_) {
                 return { population: seedPopulation(), index: 0, history: [] };
@@ -2356,6 +2361,11 @@
             }
             rebuild(newPopulation) {
                 this.population = newPopulation.slice();
+                // Reset all genomes to not dead when rebuilding (new generation)
+                this.population.forEach(g => {
+                    g.evaluated = false;
+                    g.assigned = false;
+                });
                 this._build();
             }
             _build() {
@@ -2449,8 +2459,9 @@
                             item.sim.lines = activePlayer.lines;
                             item.sim.steps = activePlayer.piecesPlaced || 0;
                         }
-                    } else if (item.genome.evaluated && !item.dead) {
-                        // Previously evaluated but not marked dead
+                    } else if (item.genome.evaluated && !item.dead && item.genome.assigned) {
+                        // Only mark as dead if it was actually assigned to a player this session
+                        // This prevents marking genomes from previous sessions as dead
                         item.dead = true;
                         item.card.classList.add('dead');
                     }
