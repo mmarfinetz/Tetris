@@ -1,74 +1,53 @@
-# Tetris AI Battle
+# Tetris AI Battle — Learning Without Backpropagation
 
-A multiplayer Tetris game featuring AI opponents that learn and evolve through gameplay. Watch genetic algorithms compete against Markov chain AIs in real-time battles.
+A multiplayer Tetris sandbox where **two gradient‑free learners** improve through play:
 
-## Features
+- **Genetic Algorithm (GA)** — population‑based evolution of evaluation weights  
+- **Markov Chain (MC)** — table‑based transition learning from observed gameplay
 
-### AI Systems
-- **Genetic Algorithm AI**: Evolutionary learning with population-based optimization
-- **Markov Chain AI**: Pattern recognition based on observed gameplay
-- **Mixed AI Battles**: Pit different AI types against each other
-- **Persistent Learning**: AI improvements saved locally and carried between sessions
+No neural nets, no gradients, **no backpropagation** — just selection, mutation, crossover, and empirical transition counts.
 
-### Game Modes
-- 4 Players (Genetic AI) - All players use evolutionary AI
-- 4 Players (Markov Chain AI) - All players use pattern-based AI  
-- 4 Players (Mixed AI) - Combination of both AI types
-- 4 Players (AI vs AI) - Head-to-head AI comparison
+**Live demo:** https://tetris-evolve.vercel.app  
+**Quick start:** clone → open `index.html` in any modern browser (no build step). :contentReference[oaicite:0]{index=0}
 
-### Power-ups System
-7 implemented power-ups that add strategic depth:
-- **GARBAGE** - Send garbage lines to opponents
-- **SPEED** - Temporarily increase game speed
-- **BLIND** - Obscure opponent's view
-- **SHIELD** - Protection from attacks
-- **CLEAR** - Clear bottom rows
-- **SLOW** - Reduce opponent's speed
-- **ELIMINATE** - Remove opponent from game
+---
 
-## Getting Started
+## Why “No‑Backprop”?
+This project demonstrates two classic, gradient‑free ways to make game‑playing agents improve:
 
-1. Clone the repository
-2. Open `index.html` in your web browser
-3. Select a game mode and watch the AIs battle
-4. View `ga_visualization.html` for genetic algorithm population analysis
+- **Genetic search** treats the policy as a black box and *evolves* it by keeping better performers and randomly recombining/mutating their parameters.
+- **Markov learning** builds a **transition probability table** directly from experience and uses it to bias future choices — an empirical, count‑based learner.
 
-No installation or build process required - runs entirely in the browser.
+Both approaches **avoid gradient descent** and the chain rule entirely, yet they still get better with more play.
 
-## How It Works
+---
 
-### Genetic Algorithm
-- Maintains a population of 50 AI genomes
-- Each genome has weighted parameters for move evaluation
-- Evolves through mutation and crossover after each generation
-- Automatically saves best-performing weights
+## How Each Learner Improves
 
-### Markov Chain Learning
-- Observes and learns from gameplay patterns
-- Builds transition probability tables for different game states
-- Falls back to heuristic evaluation when no learned data exists
-- Continuously improves through gameplay observation
+### 1) Genetic Algorithm (GA)
+- Keep a **population** of candidate policies (“genomes”), each a vector of weights used to score potential moves.  
+- Let every genome play; compute a **fitness** (e.g., lines cleared / survival time / penalties for bad board shapes).  
+- **Select** higher‑fitness genomes, **crossover** pairs, and **mutate** weights (add small noise).  
+- Repeat for the next generation; **persist** the best genomes to `localStorage` so improvements carry across sessions.
 
-### Game Architecture
-- Single HTML file containing all game logic
-- Canvas-based rendering for smooth gameplay
-- Real-time multiplayer coordination
-- localStorage persistence for AI learning data
+**Repo defaults:** population ≈ **50** and mutation strength ≈ **0.1** (editable in code). The best‑performing weights are automatically saved, and there’s a dedicated population visualization page: `ga_visualization.html`. :contentReference[oaicite:1]{index=1}
 
-## Technical Details
+> Storage key for GA: `tetris_ai_weights_v2_population` (for persisted weight populations). :contentReference[oaicite:2]{index=2}
 
-**Core Classes:**
-- `Piece` - Tetris piece logic and rotations
-- `Player` - Individual player state and AI decision-making
-- `Game` - Game orchestration and multiplayer coordination
-- `PopulationVisualizer` - Genetic algorithm population display
+### 2) Markov Chain (MC)
+- While games run, the MC agent **observes sequences** of (state, action, next‑state) and increments counts.  
+- It converts counts into **transition probabilities**, using them to bias future actions from similar states.  
+- When there’s no data for a situation, it falls back to a simple heuristic evaluation.  
+- Learned transition tables persist in the browser so play today informs play tomorrow.
 
-**AI Storage:**
-- Genetic weights: `tetris_ai_weights_v2_population`
-- Markov chains: `tetris_markov_chains_v2_human_learned`
+> Storage key for MC: `tetris_markov_chains_v2_human_learned`. :contentReference[oaicite:3]{index=3}
 
-**Game Constants:**
-- Board: 10×20 grid with 20px blocks
-- Default population size: 50 genomes
-- Mutation strength: 0.1
-- Frame rate: 60 FPS
+---
+
+## See It Learn (5‑Minute Demo)
+
+1. **Start from scratch** (optional but recommended)  
+   Open the browser console and clear the saved learners:
+   ```js
+   localStorage.removeItem('tetris_ai_weights_v2_population');
+   localStorage.removeItem('tetris_markov_chains_v2_human_learned');
