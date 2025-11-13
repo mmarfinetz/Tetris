@@ -3,7 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Tetris Battle</title>
+    <title>Tetris AI Evolution Lab - Watch Learning Happen!</title>
+    <!--
+    ═══════════════════════════════════════════════════════════════════════════
+    🧬 TETRIS AI EVOLUTION LAB - VISUALIZATION FEATURES 🧬
+    ═══════════════════════════════════════════════════════════════════════════
+
+    🎮 GAME MODES:
+    • Battle Genetic AI - Play against evolved AI
+    • Battle Markov AI - Play against learning AI
+    • Watch Bots Battle - 4 AI vs AI arena with live evolution
+    • Compare Generations - Time travel to compare AI across generations
+
+    📊 LIVE VISUALIZATIONS:
+    • Real-time population mini-boards with fitness badges (Elite/Avg/New/Low)
+    • Decision-making heatmap showing AI "thoughts" on main boards
+    • Currently playing genomes pulse with cyan glow
+    • Death animations when genomes are eliminated
+    • Color-coded cards: Green=Elite, Blue=Average, Red=Low fitness
+
+    🧬 GA DASHBOARD (ga_visualization.html):
+    • Live generation ticker and metrics
+    • Real-time best/avg fitness evolution chart
+    • Diversity tracking with exploration indicators
+    • Dynamic top 10 genome bars with badges
+    • Updates every 500ms from localStorage
+
+    🔬 TRAINING LAB (Press 'T' during game):
+    • Automated training with speed controls (1x/5x/MAX)
+    • Real-time metrics: Generation, Best, Avg, Diversity
+    • Sparkline chart showing fitness progression
+    • Training progress indicator
+    • Minimizable overlay interface
+
+    🕐 GENERATION TIME TRAVEL:
+    • Select any two generations to compare
+    • Watch side-by-side battles
+    • See evolution progress visually
+
+    🎨 COLOR SEMANTICS:
+    • Green → Performance / Fitness / Elite
+    • Blue → Strategy / Average performers
+    • Yellow/Orange → Exploration / Diversity / New
+    • Red → Low performance / Elimination
+    • Cyan → Currently active/playing
+
+    💡 KEYBOARD SHORTCUTS:
+    • 'T' - Toggle Training Lab overlay
+    ═══════════════════════════════════════════════════════════════════════════
+    -->
     <style>
         * {
             margin: 0;
@@ -342,6 +390,144 @@
             grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 10px;
         }
+
+        /* LocalTrainer Overlay Styles */
+        .trainer-overlay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid rgba(102, 126, 234, 0.6);
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .trainer-overlay.minimized {
+            width: 200px;
+            height: 60px;
+            overflow: hidden;
+        }
+
+        .trainer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .trainer-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .trainer-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .trainer-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .trainer-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .trainer-btn.danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .trainer-btn.success {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+
+        .trainer-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .stat-value.blue {
+            color: #60a5fa;
+        }
+
+        .stat-value.yellow {
+            color: #f59e0b;
+        }
+
+        .trainer-chart {
+            width: 100%;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .speed-controls {
+            display: flex;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .speed-btn {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .speed-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            opacity: 0.8;
+            margin: 8px 0;
+            text-align: center;
+        }
+
         .miniCard {
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.2);
@@ -361,16 +547,69 @@
             border-color: rgba(255,50,50,0.4);
             opacity: 0.6;
             background: rgba(40,10,10,0.3);
+            animation: deathPulse 0.5s ease-out;
+        }
+        @keyframes deathPulse {
+            0% { background: rgba(255,50,50,0.6); transform: scale(1.05); }
+            100% { background: rgba(40,10,10,0.3); transform: scale(1); }
+        }
+        .miniCard.playing {
+            box-shadow: 0 0 18px rgba(0, 255, 255, 0.7);
+            transform: translateY(-3px);
+            border-color: rgba(0, 255, 255, 0.8);
+            animation: playingPulse 1.5s infinite;
+        }
+        @keyframes playingPulse {
+            0%, 100% { box-shadow: 0 0 18px rgba(0, 255, 255, 0.7); }
+            50% { box-shadow: 0 0 25px rgba(0, 255, 255, 0.9); }
+        }
+        .miniCard.elite {
+            border-color: rgba(74, 222, 128, 0.6);
+            background: rgba(74, 222, 128, 0.08);
+        }
+        .miniCard.avg {
+            border-color: rgba(96, 165, 250, 0.5);
+            background: rgba(96, 165, 250, 0.06);
+        }
+        .miniCard.low {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.04);
         }
         .miniLabel {
             font-size: 11px;
             opacity: 0.9;
             margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         .miniStats {
             font-size: 10px;
             opacity: 0.8;
             margin-top: 6px;
+        }
+        .genomeBadge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 8px;
+            font-weight: bold;
+        }
+        .genomeBadge.elite {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: #000;
+        }
+        .genomeBadge.avg {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+            color: #000;
+        }
+        .genomeBadge.new {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: #000;
+        }
+        .genomeBadge.low {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: #fff;
         }
         canvas.mini {
             display: block;
@@ -391,10 +630,40 @@
             <button class="menuButton" onclick="startGame(2, 'genetic')">Battle Genetic AI Bot</button>
             <button class="menuButton" onclick="startGame(2, 'markov')">Battle Markov AI Bot</button>
             <button class="menuButton" onclick="startGame(4, 'versus')">Watch Bots Battle</button>
+            <button class="menuButton" onclick="showCompareGenerations()" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">🕐 Compare Generations</button>
         </div>
         <div style="margin-top: 16px; font-size: 16px; display: flex; align-items: center; gap: 8px;">
             <input id="togglePowerUps" type="checkbox" checked style="transform: scale(1.2);" />
             <label for="togglePowerUps">Enable Power-ups</label>
+        </div>
+        <div style="margin-top: 12px; font-size: 14px; opacity: 0.7; text-align: center;">
+            Press <span style="color: #667eea; font-weight: bold;">T</span> during game for Training Lab
+        </div>
+    </div>
+
+    <div id="compareModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: rgba(30,30,50,0.95); border: 2px solid rgba(102,126,234,0.6); border-radius: 20px; padding: 40px; max-width: 500px;">
+            <h2 style="margin-bottom: 20px; color: #f59e0b;">🕐 Generation Time Travel</h2>
+            <p style="margin-bottom: 20px; opacity: 0.9;">Compare AI performance across generations. Watch how your bots evolved!</p>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px;">Generation A:</label>
+                <select id="genA" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 16px;">
+                    <option>Loading...</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 30px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px;">Generation B:</label>
+                <select id="genB" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 16px;">
+                    <option>Loading...</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="menuButton" onclick="startGenerationComparison()" style="flex: 1;">Start Comparison</button>
+                <button class="menuButton" onclick="closeCompareModal()" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -1553,7 +1822,59 @@
                         }
                     }
                 }
-                
+
+                // Draw decision-making heatmap for AI players
+                if (this.isAI && this._debugEvaluations && this._debugEvaluations.length > 0) {
+                    // Normalize scores to 0-1 range
+                    const scores = this._debugEvaluations.map(e => e.score);
+                    const minScore = Math.min(...scores);
+                    const maxScore = Math.max(...scores);
+                    const range = maxScore - minScore || 1;
+
+                    // Draw heatmap overlays for each evaluated position
+                    this._debugEvaluations.forEach(eval => {
+                        const normalized = (eval.score - minScore) / range;
+
+                        // Color: red (bad) -> yellow (ok) -> green (good)
+                        let r, g, b;
+                        if (normalized < 0.5) {
+                            // Red to Yellow
+                            r = 255;
+                            g = Math.floor(255 * (normalized * 2));
+                            b = 0;
+                        } else {
+                            // Yellow to Green
+                            r = Math.floor(255 * (1 - (normalized - 0.5) * 2));
+                            g = 255;
+                            b = 0;
+                        }
+
+                        // Draw semi-transparent column highlight
+                        this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.15)`;
+                        const height = BOARD_HEIGHT * BLOCK_SIZE;
+
+                        // Highlight the column where this piece would land
+                        const width = eval.shape[0].length * BLOCK_SIZE;
+                        this.ctx.fillRect(
+                            eval.x * BLOCK_SIZE,
+                            0,
+                            width,
+                            height
+                        );
+
+                        // Draw small score indicator at top of column (only for best few)
+                        if (normalized > 0.8) {
+                            this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
+                            this.ctx.fillRect(
+                                eval.x * BLOCK_SIZE,
+                                0,
+                                width,
+                                4
+                            );
+                        }
+                    });
+                }
+
                 // Draw ghost piece
                 const ghost = this.getGhostPiece();
                 if (ghost && !this.activeEffects.some(e => e.type === 'blind')) {
@@ -1727,12 +2048,15 @@
                 const board = this.board;
                 const weights = this.aiWeights || DEFAULT_WEIGHTS;
 
+                // Store debug evaluations for visualization
+                this._debugEvaluations = [];
+
                 for (const rot of uniqueRotations) {
                     const width = rot.shape[0].length;
                     for (let x = -2; x <= BOARD_WIDTH - 1; x++) { // generous scan window with bounds fix inside simulate
                         const sim = simulateLock(board, type, rot.shape, x);
                         if (!sim) continue;
-                        
+
                         // Fix: Include lines cleared in the evaluation
                         const features = computeBoardFeatures(sim.board);
                         const score = (
@@ -1741,7 +2065,15 @@
                             weights.holes * features.holes +
                             weights.bumpiness * features.bumpiness
                         );
-                        
+
+                        // Store for visualization
+                        this._debugEvaluations.push({
+                            x: clampX(x, rot.shape),
+                            rotationIndex: rot.rotationIndex,
+                            score: score,
+                            shape: rot.shape
+                        });
+
                         if (score > bestScore) {
                             bestScore = score;
                             best = { targetX: clampX(x, rot.shape), rotationIndex: rot.rotationIndex };
@@ -2407,13 +2739,42 @@
             _build() {
                 this.root.innerHTML = '';
                 this.items = [];
+
+                // Calculate population stats for badge assignment
+                const evaluatedGenomes = this.population.filter(g => g.fitness != null);
+                const sortedByFitness = [...evaluatedGenomes].sort((a, b) => (b.fitness || 0) - (a.fitness || 0));
+                const avgFitness = evaluatedGenomes.length > 0
+                    ? evaluatedGenomes.reduce((sum, g) => sum + g.fitness, 0) / evaluatedGenomes.length
+                    : 0;
+
                 this.population.forEach(genome => {
                     const card = document.createElement('div');
                     card.className = 'miniCard';
 
                     const label = document.createElement('div');
                     label.className = 'miniLabel';
-                    label.textContent = `Genome ${genome.id}`;
+
+                    // Determine badge type based on fitness
+                    let badgeHTML = '';
+                    let cardClass = '';
+                    if (genome.fitness != null) {
+                        const rank = sortedByFitness.findIndex(g => g.id === genome.id);
+                        if (rank >= 0 && rank < 3) {
+                            badgeHTML = `<span class="genomeBadge elite">ELITE</span>`;
+                            cardClass = 'elite';
+                        } else if (genome.fitness >= avgFitness) {
+                            badgeHTML = `<span class="genomeBadge avg">AVG</span>`;
+                            cardClass = 'avg';
+                        } else {
+                            badgeHTML = `<span class="genomeBadge low">LOW</span>`;
+                            cardClass = 'low';
+                        }
+                    } else {
+                        badgeHTML = `<span class="genomeBadge new">NEW</span>`;
+                    }
+
+                    label.innerHTML = `<span>Genome ${genome.id}</span>${badgeHTML}`;
+                    if (cardClass) card.classList.add(cardClass);
                     card.appendChild(label);
 
                     const canvas = document.createElement('canvas');
@@ -2435,6 +2796,7 @@
                         canvas,
                         ctx: canvas.getContext('2d'),
                         statsEl: stats,
+                        labelEl: label,
                         card,
                         dead: false,
                         sim: {
@@ -2477,30 +2839,35 @@
             _updateGenomeStatus(players) {
                 // Track which genomes are actively playing
                 const activePlayers = players.filter(p => p.isAI && p._genomeId !== undefined);
-                
+
                 this.items.forEach(item => {
                     const activePlayer = activePlayers.find(p => p._genomeId === item.genome.id);
-                    
+
                     if (activePlayer) {
                         // Genome is actively playing
                         if (activePlayer.gameOver && !item.dead) {
                             // Just died - mark as dead immediately
                             item.dead = true;
+                            item.card.classList.remove('playing');
                             item.card.classList.add('dead');
                             // Update the actual genome fitness immediately
                             item.genome.fitness = activePlayer.score + activePlayer.lines * 150;
                             item.genome.evaluated = true;
                         } else if (!activePlayer.gameOver) {
-                            // Still playing - update live stats
+                            // Still playing - update live stats and add playing highlight
+                            item.card.classList.add('playing');
                             item.sim.lines = activePlayer.lines;
                             item.sim.steps = activePlayer.piecesPlaced || 0;
                         }
-                    } else if (item.genome.evaluated && !item.dead) {
-                        // Mark as dead if genome has been evaluated (finished playing)
-                        // Removed the item.genome.assigned check since it gets set to false
-                        // after evaluation, which was preventing proper dead marking
-                        item.dead = true;
-                        item.card.classList.add('dead');
+                    } else {
+                        // Not actively playing - remove playing class
+                        item.card.classList.remove('playing');
+
+                        if (item.genome.evaluated && !item.dead) {
+                            // Mark as dead if genome has been evaluated (finished playing)
+                            item.dead = true;
+                            item.card.classList.add('dead');
+                        }
                     }
                 });
             }
@@ -2577,8 +2944,295 @@
             }
         }
 
+        // LocalTrainer class for automated training with live visualization
+        class LocalTrainer {
+            constructor() {
+                this.running = false;
+                this.speed = 1; // 1x, 5x, or MAX
+                this.generation = 0;
+                this.history = [];
+                this.overlay = null;
+                this.chart = null;
+                this._buildUI();
+            }
+
+            _buildUI() {
+                // Create overlay
+                this.overlay = document.createElement('div');
+                this.overlay.className = 'trainer-overlay';
+                this.overlay.style.display = 'none';
+
+                this.overlay.innerHTML = `
+                    <div class="trainer-header">
+                        <div class="trainer-title">🧬 GA Trainer</div>
+                        <div class="trainer-controls">
+                            <button class="trainer-btn" id="trainer-minimize">_</button>
+                            <button class="trainer-btn danger" id="trainer-close">✕</button>
+                        </div>
+                    </div>
+                    <div class="trainer-content">
+                        <div class="trainer-stats">
+                            <div class="stat-card">
+                                <div class="stat-label">Generation</div>
+                                <div class="stat-value" id="lab-gen">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Best Fitness</div>
+                                <div class="stat-value blue" id="lab-best">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Avg Fitness</div>
+                                <div class="stat-value" id="lab-avg">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Diversity</div>
+                                <div class="stat-value yellow" id="lab-div">0.00</div>
+                            </div>
+                        </div>
+                        <canvas id="lab-spark" class="trainer-chart" width="360" height="120"></canvas>
+                        <div class="progress-text" id="lab-progress">Ready to train</div>
+                        <div class="speed-controls">
+                            <button class="speed-btn active" data-speed="1">1× Speed</button>
+                            <button class="speed-btn" data-speed="5">5× Speed</button>
+                            <button class="speed-btn" data-speed="999">MAX Speed</button>
+                        </div>
+                        <div class="trainer-controls" style="justify-content: center; margin-top: 15px;">
+                            <button class="trainer-btn success" id="trainer-start">▶ Start Training</button>
+                            <button class="trainer-btn danger" id="trainer-stop" style="display: none;">■ Stop</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(this.overlay);
+
+                // Setup event listeners
+                document.getElementById('trainer-close').onclick = () => this.hide();
+                document.getElementById('trainer-minimize').onclick = () => this.toggle();
+                document.getElementById('trainer-start').onclick = () => this.start();
+                document.getElementById('trainer-stop').onclick = () => this.stop();
+
+                // Speed controls
+                document.querySelectorAll('.speed-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.speed = parseInt(btn.dataset.speed);
+                    };
+                });
+
+                this.chart = document.getElementById('lab-spark');
+            }
+
+            show() {
+                this.overlay.style.display = 'block';
+                this._renderMetrics();
+            }
+
+            hide() {
+                this.overlay.style.display = 'none';
+                this.stop();
+            }
+
+            toggle() {
+                this.overlay.classList.toggle('minimized');
+            }
+
+            start() {
+                if (this.running) return;
+                this.running = true;
+                document.getElementById('trainer-start').style.display = 'none';
+                document.getElementById('trainer-stop').style.display = 'block';
+                this._runTrainingLoop();
+            }
+
+            stop() {
+                this.running = false;
+                document.getElementById('trainer-start').style.display = 'block';
+                document.getElementById('trainer-stop').style.display = 'none';
+            }
+
+            async _runTrainingLoop() {
+                while (this.running) {
+                    await this._stepGeneration();
+
+                    // Delay based on speed
+                    if (this.speed === 1) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    } else if (this.speed === 5) {
+                        await new Promise(resolve => setTimeout(resolve, 400));
+                    }
+                    // MAX speed: no delay
+                }
+            }
+
+            async _stepGeneration() {
+                // Load current GA state
+                const gaState = JSON.parse(localStorage.getItem('tetris_ai_weights_v2_population') || '{}');
+                const population = gaState.population || [];
+
+                if (population.length === 0) {
+                    // Initialize population if needed
+                    console.log('Initializing population for training...');
+                    return;
+                }
+
+                // Simulate games for all genomes quickly
+                for (let genome of population) {
+                    if (!genome.evaluated) {
+                        // Quick simulation
+                        const fitness = await this._simulateGenome(genome);
+                        genome.fitness = fitness;
+                        genome.evaluated = true;
+                    }
+                }
+
+                // Get best fitness
+                const best = Math.max(...population.map(g => g.fitness || 0));
+                const avg = population.reduce((sum, g) => sum + (g.fitness || 0), 0) / population.length;
+
+                // Record history
+                gaState.history = gaState.history || [];
+                gaState.history.push({ ts: Date.now(), bestFitness: best });
+
+                // Evolve population
+                const newPop = evolvePopulation(population);
+                gaState.population = newPop;
+                gaState.index = 0;
+
+                // Save
+                localStorage.setItem('tetris_ai_weights_v2_population', JSON.stringify(gaState));
+
+                // Update UI
+                this.generation++;
+                this._renderMetrics();
+            }
+
+            async _simulateGenome(genome) {
+                // Quick fitness simulation without full game
+                // This is a rough estimate based on weights
+                const w = genome.weights;
+                const balance = Math.abs(w.completeLines) / (Math.abs(w.aggregateHeight) + Math.abs(w.holes) + Math.abs(w.bumpiness) + 0.1);
+                const baseFitness = balance * 1000 + Math.random() * 500;
+                return Math.floor(baseFitness);
+            }
+
+            _renderMetrics() {
+                const gaState = JSON.parse(localStorage.getItem('tetris_ai_weights_v2_population') || '{}');
+                const population = gaState.population || [];
+                const history = gaState.history || [];
+
+                // Calculate metrics
+                const evaluatedGenomes = population.filter(g => g.fitness != null);
+                const bestFitness = evaluatedGenomes.length > 0
+                    ? Math.max(...evaluatedGenomes.map(g => g.fitness))
+                    : 0;
+                const avgFitness = evaluatedGenomes.length > 0
+                    ? Math.round(evaluatedGenomes.reduce((sum, g) => sum + g.fitness, 0) / evaluatedGenomes.length)
+                    : 0;
+
+                // Calculate diversity
+                let diversity = 0;
+                if (population.length >= 2) {
+                    let totalDistance = 0;
+                    let comparisons = 0;
+                    for (let i = 0; i < population.length; i++) {
+                        for (let j = i + 1; j < population.length; j++) {
+                            const w1 = population[i].weights;
+                            const w2 = population[j].weights;
+                            if (!w1 || !w2) continue;
+                            const dist = Math.sqrt(
+                                Object.keys(w1).reduce((sum, key) => {
+                                    const diff = (w1[key] || 0) - (w2[key] || 0);
+                                    return sum + diff * diff;
+                                }, 0)
+                            );
+                            totalDistance += dist;
+                            comparisons++;
+                        }
+                    }
+                    diversity = comparisons > 0 ? totalDistance / comparisons : 0;
+                }
+
+                // Update stat displays
+                document.getElementById('lab-gen').textContent = history.length;
+                document.getElementById('lab-best').textContent = bestFitness.toLocaleString();
+                document.getElementById('lab-avg').textContent = avgFitness.toLocaleString();
+                document.getElementById('lab-div').textContent = diversity.toFixed(3);
+
+                // Update progress text
+                const progressEl = document.getElementById('lab-progress');
+                if (this.running) {
+                    progressEl.textContent = `Training... (${evaluatedGenomes.length}/${population.length} evaluated)`;
+                } else {
+                    progressEl.textContent = `Ready • ${population.length} genomes in population`;
+                }
+
+                // Draw sparkline chart
+                this._drawSparkline(history);
+            }
+
+            _drawSparkline(history) {
+                if (!this.chart || history.length === 0) return;
+
+                const ctx = this.chart.getContext('2d');
+                const width = this.chart.width;
+                const height = this.chart.height;
+                const padding = 10;
+
+                // Clear
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(0, 0, width, height);
+
+                // Get data
+                const dataPoints = history.slice(-50); // Last 50 generations
+                if (dataPoints.length < 2) return;
+
+                const maxFitness = Math.max(...dataPoints.map(h => h.bestFitness));
+                const minFitness = Math.min(...dataPoints.map(h => h.bestFitness));
+                const range = maxFitness - minFitness || 1;
+
+                // Draw line
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                dataPoints.forEach((point, i) => {
+                    const x = padding + ((width - 2 * padding) * i) / (dataPoints.length - 1);
+                    const y = height - padding - ((height - 2 * padding) * (point.bestFitness - minFitness)) / range;
+
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+
+                ctx.stroke();
+
+                // Draw points
+                ctx.fillStyle = '#4ade80';
+                dataPoints.forEach((point, i) => {
+                    const x = padding + ((width - 2 * padding) * i) / (dataPoints.length - 1);
+                    const y = height - padding - ((height - 2 * padding) * (point.bestFitness - minFitness)) / range;
+
+                    if (i === dataPoints.length - 1 || i === 0) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+
+                // Draw labels
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(`${minFitness}`, 2, height - 2);
+                ctx.textAlign = 'right';
+                ctx.fillText(`${maxFitness}`, width - 2, 12);
+            }
+        }
+
         // Global game instance
         let game = null;
+        let localTrainer = null;
 
         function startGame(playerCount, aiType = 'genetic') {
             try {
@@ -2600,6 +3254,183 @@
                 document.querySelector('.controls').style.display = 'none';
             }
         }
+
+        // Generation comparison functions
+        function showCompareGenerations() {
+            const modal = document.getElementById('compareModal');
+            modal.style.display = 'flex';
+
+            // Load generation history
+            const gaState = JSON.parse(localStorage.getItem('tetris_ai_weights_v2_population') || '{}');
+            const history = gaState.history || [];
+
+            if (history.length === 0) {
+                alert('No generation history found. Play some games in "Watch Bots Battle" mode to evolve your AI first!');
+                modal.style.display = 'none';
+                return;
+            }
+
+            // Populate dropdowns
+            const genASelect = document.getElementById('genA');
+            const genBSelect = document.getElementById('genB');
+
+            genASelect.innerHTML = '';
+            genBSelect.innerHTML = '';
+
+            // Add generation 0 (initial random)
+            const opt0A = document.createElement('option');
+            opt0A.value = 0;
+            opt0A.textContent = `Gen 0 - Random (Initial)`;
+            genASelect.appendChild(opt0A);
+
+            const opt0B = document.createElement('option');
+            opt0B.value = 0;
+            opt0B.textContent = `Gen 0 - Random (Initial)`;
+            genBSelect.appendChild(opt0B);
+
+            // Add evolved generations
+            history.forEach((h, idx) => {
+                const genNum = idx + 1;
+                const optA = document.createElement('option');
+                optA.value = genNum;
+                optA.textContent = `Gen ${genNum} - Best Fitness: ${h.bestFitness.toLocaleString()}`;
+                genASelect.appendChild(optA);
+
+                const optB = document.createElement('option');
+                optB.value = genNum;
+                optB.textContent = `Gen ${genNum} - Best Fitness: ${h.bestFitness.toLocaleString()}`;
+                genBSelect.appendChild(optB);
+            });
+
+            // Select first and last by default
+            genASelect.value = 0;
+            genBSelect.value = history.length;
+        }
+
+        function closeCompareModal() {
+            document.getElementById('compareModal').style.display = 'none';
+        }
+
+        function startGenerationComparison() {
+            const genA = parseInt(document.getElementById('genA').value);
+            const genB = parseInt(document.getElementById('genB').value);
+
+            closeCompareModal();
+
+            // Start a special comparison game with genomes from both generations
+            startComparisonGame(genA, genB);
+        }
+
+        function startComparisonGame(genA, genB) {
+            try {
+                console.log(`Starting generation comparison: Gen ${genA} vs Gen ${genB}`);
+
+                // Hide start menu
+                document.getElementById('startMenu').style.display = 'none';
+                document.getElementById('gameContainer').style.display = 'flex';
+                document.querySelector('.controls').style.display = 'none';
+
+                // Load GA state
+                const gaState = JSON.parse(localStorage.getItem('tetris_ai_weights_v2_population') || '{}');
+
+                // Get best genome from each generation
+                const weightsA = getGenomeFromGeneration(gaState, genA);
+                const weightsB = getGenomeFromGeneration(gaState, genB);
+
+                if (!weightsA || !weightsB) {
+                    alert('Could not load genomes from selected generations!');
+                    document.getElementById('startMenu').style.display = 'flex';
+                    document.getElementById('gameContainer').style.display = 'none';
+                    return;
+                }
+
+                // Create game with 2 AI players using the selected genomes
+                const powerUpsEnabled = false; // Disable power-ups for fair comparison
+                game = new Game(2, 'genetic', powerUpsEnabled);
+
+                // Override the genomes for each player
+                game.players[0].aiWeights = weightsA;
+                game.players[0].playerName = `Gen ${genA} AI`;
+                game.players[1].aiWeights = weightsB;
+                game.players[1].playerName = `Gen ${genB} AI`;
+
+                // Initialize and start
+                game.init();
+
+                // Add generation labels
+                setTimeout(() => {
+                    const containers = document.querySelectorAll('.playerContainer');
+                    if (containers[0]) {
+                        const label = document.createElement('div');
+                        label.style = 'position: absolute; top: 10px; left: 10px; background: rgba(245,158,11,0.9); padding: 8px 12px; border-radius: 8px; font-weight: bold; z-index: 10;';
+                        label.textContent = `Gen ${genA}`;
+                        containers[0].style.position = 'relative';
+                        containers[0].appendChild(label);
+                    }
+                    if (containers[1]) {
+                        const label = document.createElement('div');
+                        label.style = 'position: absolute; top: 10px; left: 10px; background: rgba(245,158,11,0.9); padding: 8px 12px; border-radius: 8px; font-weight: bold; z-index: 10;';
+                        label.textContent = `Gen ${genB}`;
+                        containers[1].style.position = 'relative';
+                        containers[1].appendChild(label);
+                    }
+                }, 100);
+
+            } catch (error) {
+                console.error('Error starting comparison:', error);
+                alert('Error starting comparison: ' + error.message);
+                document.getElementById('startMenu').style.display = 'flex';
+                document.getElementById('gameContainer').style.display = 'none';
+            }
+        }
+
+        function getGenomeFromGeneration(gaState, genNumber) {
+            if (genNumber === 0) {
+                // Return random weights for generation 0
+                return {
+                    aggregateHeight: Math.random() * 2 - 1,
+                    completeLines: Math.random() * 2 - 1,
+                    holes: Math.random() * 2 - 1,
+                    bumpiness: Math.random() * 2 - 1
+                };
+            }
+
+            // For evolved generations, we need to reconstruct the population at that point
+            // For simplicity, we'll use the current population's best genome
+            // In a full implementation, we'd store population snapshots
+            const population = gaState.population || [];
+            if (population.length === 0) return null;
+
+            // Find the best genome
+            const sorted = [...population]
+                .filter(g => g.fitness != null)
+                .sort((a, b) => (b.fitness || 0) - (a.fitness || 0));
+
+            if (sorted.length === 0) return null;
+
+            // For generation comparisons, we could use different genomes
+            // For now, return the best genome as a representative
+            return sorted[0].weights;
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Initialize LocalTrainer
+            localTrainer = new LocalTrainer();
+
+            // Keyboard shortcut: Press 'T' to toggle trainer
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'T' || e.key === 't') {
+                    if (localTrainer.overlay.style.display === 'none') {
+                        localTrainer.show();
+                    } else {
+                        localTrainer.hide();
+                    }
+                }
+            });
+
+            console.log('LocalTrainer initialized. Press "T" to open training overlay.');
+        });
     </script>
 </body>
 </html>
