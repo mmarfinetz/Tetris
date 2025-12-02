@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris AI Learning Visualization - GA vs Markov Chain</title>
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════
+           CORE STYLES & VARIABLES
+           ═══════════════════════════════════════════════════════════════════ */
+        :root {
+            /* Base palette */
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --panel-bg: rgba(0, 0, 0, 0.75);
+            --panel-border: rgba(255, 255, 255, 0.15);
+
+            /* GA theme - Greens */
+            --ga-primary: #4ade80;
+            --ga-secondary: #22c55e;
+            --ga-glow: rgba(74, 222, 128, 0.4);
+
+            /* MC theme - Blues */
+            --mc-primary: #60a5fa;
+            --mc-secondary: #3b82f6;
+            --mc-glow: rgba(96, 165, 250, 0.4);
+
+            /* Semantic colors */
+            --explore-color: #f59e0b;
+            --poor-color: #ef4444;
+            --accent-pink: #f093fb;
+            --accent-coral: #f5576c;
+
+            /* Animation timing */
+            --ease-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
+            --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           LAYOUT STRUCTURE
+           ═══════════════════════════════════════════════════════════════════ */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto 1fr auto;
+            gap: 16px;
+            padding: 16px;
+            max-width: 1600px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--panel-bg);
+            border-radius: 16px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-coral));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--poor-color);
+            transition: background 0.3s var(--ease-out-cubic);
+        }
+
+        .status-dot.connected {
+            background: var(--ga-primary);
+            box-shadow: 0 0 12px var(--ga-glow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        .connect-btn {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 24px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s var(--ease-out-cubic);
+        }
+
+        .connect-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .connect-btn.active {
+            background: var(--ga-secondary);
+            border-color: var(--ga-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           PANEL STYLES
+           ═══════════════════════════════════════════════════════════════════ */
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 16px;
+            border: 1px solid var(--panel-border);
+            padding: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .panel-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title .icon {
+            font-size: 1.3em;
+        }
+
+        .panel-subtitle {
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .panel.full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* Algorithm-specific styling */
+        .panel.ga-theme {
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+
+        .panel.ga-theme .panel-title {
+            color: var(--ga-primary);
+        }
+
+        .panel.mc-theme {
+            border-color: rgba(96, 165, 250, 0.3);
+        }
+
+        .panel.mc-theme .panel-title {
+            color: var(--mc-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           LEARNING CURVES PANEL
+           ═══════════════════════════════════════════════════════════════════ */
+        .learning-curves {
+            grid-column: 1 / -1;
+            min-height: 280px;
+        }
+
+        .curves-canvas {
+            width: 100%;
+            height: 220px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .curves-legend {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-top: 12px;
+            font-size: 0.9em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.ga { background: var(--ga-primary); box-shadow: 0 0 8px var(--ga-glow); }
+        .legend-dot.mc { background: var(--mc-primary); box-shadow: 0 0 8px var(--mc-glow); }
+        .legend-dot.divergence { background: linear-gradient(45deg, var(--ga-primary), var(--mc-primary)); }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           GENOME SPACE VISUALIZATION
+           ═══════════════════════════════════════════════════════════════════ */
+        .genome-space {
+            min-height: 360px;
+        }
+
+        .genome-canvas {
+            width: 100%;
+            height: 300px;
+            border-radius: 8px;
+            background: radial-gradient(ellipse at center, rgba(74, 222, 128, 0.05) 0%, transparent 70%);
+        }
+
+        .genome-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            font-size: 0.85em;
+            opacity: 0.8;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           MARKOV STATE GRAPH
+           ═══════════════════════════════════════════════════════════════════ */
+        .state-graph {
+            min-height: 360px;
+        }
+
+        .graph-canvas {
+            width: 100%;
+            height: 300px;
+            border-radius: 8px;
+            background: radial-gradient(ellipse at center, rgba(96, 165, 250, 0.05) 0%, transparent 70%);
+        }
+
+        .graph-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            font-size: 0.85em;
+            opacity: 0.8;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           DECISION HEATMAPS
+           ═══════════════════════════════════════════════════════════════════ */
+        .heatmaps-container {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .heatmap-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .heatmap-canvas {
+            width: 160px;
+            height: 320px;
+            border-radius: 8px;
+            border: 2px solid var(--panel-border);
+            image-rendering: pixelated;
+        }
+
+        .heatmap-label {
+            margin-top: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .heatmap-panel.ga-theme .heatmap-canvas {
+            border-color: rgba(74, 222, 128, 0.4);
+        }
+
+        .heatmap-panel.mc-theme .heatmap-canvas {
+            border-color: rgba(96, 165, 250, 0.4);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           METRICS PANEL
+           ═══════════════════════════════════════════════════════════════════ */
+        .metrics-panel {
+            grid-column: 1 / -1;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--panel-border);
+            transition: transform 0.3s var(--ease-out-cubic);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .metric-card.ga-accent {
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+
+        .metric-card.mc-accent {
+            border-color: rgba(96, 165, 250, 0.3);
+        }
+
+        .metric-label {
+            font-size: 0.75em;
+            opacity: 0.7;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            transition: all 0.3s var(--ease-out-cubic);
+        }
+
+        .metric-value.ga { color: var(--ga-primary); }
+        .metric-value.mc { color: var(--mc-primary); }
+        .metric-value.explore { color: var(--explore-color); }
+        .metric-value.poor { color: var(--poor-color); }
+
+        .metric-delta {
+            font-size: 0.75em;
+            margin-top: 4px;
+            opacity: 0.8;
+        }
+
+        .metric-delta.positive { color: var(--ga-primary); }
+        .metric-delta.negative { color: var(--poor-color); }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           TIMELINE SCRUBBER
+           ═══════════════════════════════════════════════════════════════════ */
+        .timeline-panel {
+            grid-column: 1 / -1;
+        }
+
+        .timeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timeline-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .timeline-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid var(--panel-border);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s var(--ease-out-cubic);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .timeline-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .timeline-btn.active {
+            background: var(--bg-gradient-start);
+            border-color: var(--accent-pink);
+        }
+
+        .timeline-scrubber {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ga-primary), var(--mc-primary));
+            border-radius: 4px;
+            position: relative;
+            transition: width 0.1s linear;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .timeline-markers {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.75em;
+            opacity: 0.6;
+        }
+
+        .speed-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .speed-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            background: transparent;
+            color: white;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s var(--ease-out-cubic);
+        }
+
+        .speed-btn.active {
+            background: var(--bg-gradient-start);
+            border-color: var(--accent-pink);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           EMPTY STATE
+           ═══════════════════════════════════════════════════════════════════ */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            opacity: 0.6;
+            text-align: center;
+        }
+
+        .empty-state .icon {
+            font-size: 3em;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 0.95em;
+            max-width: 280px;
+            line-height: 1.5;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           ANIMATIONS
+           ═══════════════════════════════════════════════════════════════════ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .animate-in {
+            animation: fadeIn 0.5s var(--ease-out-cubic) forwards;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           RESPONSIVE DESIGN
+           ═══════════════════════════════════════════════════════════════════ */
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .genome-space, .state-graph {
+                grid-column: 1;
+            }
+
+            .heatmaps-container {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.3em;
+            }
+
+            .heatmaps-container {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           ALGORITHM INSIGHT BADGES
+           ═══════════════════════════════════════════════════════════════════ */
+        .insight-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+
+        .insight-badge.evolution {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--ga-primary);
+        }
+
+        .insight-badge.learning {
+            background: rgba(96, 165, 250, 0.2);
+            color: var(--mc-primary);
+        }
+
+        .insight-badge.exploring {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--explore-color);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 200px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <h1>Tetris AI Learning Laboratory</h1>
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+                <button class="connect-btn" id="connectBtn">Connect to Game</button>
+            </div>
+        </header>
+
+        <!-- Dual Learning Curves -->
+        <section class="panel full-width learning-curves animate-in" style="animation-delay: 0.1s;">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title">
+                        <span class="icon">📈</span>
+                        Learning Curves - Performance Over Time
+                    </div>
+                    <div class="panel-subtitle">Comparing fitness/reward progression for both algorithms</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <span class="insight-badge evolution">GA: Generations</span>
+                    <span class="insight-badge learning">MC: Observations</span>
+                </div>
+            </div>
+            <canvas class="curves-canvas" id="curvesCanvas"></canvas>
+            <div class="curves-legend">
+                <div class="legend-item">
+                    <div class="legend-dot ga"></div>
+                    <span>Genetic Algorithm (Best Fitness)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot mc"></div>
+                    <span>Markov Chain (Avg Reward)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot divergence"></div>
+                    <span>Convergence Zone</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- GA Genome Space -->
+        <section class="panel ga-theme genome-space animate-in" style="animation-delay: 0.2s;">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title">
+                        <span class="icon">🧬</span>
+                        Genetic Population Space
+                    </div>
+                    <div class="panel-subtitle">4D weights projected to 2D - watch evolution happen</div>
+                </div>
+            </div>
+            <canvas class="genome-canvas" id="genomeCanvas"></canvas>
+            <div class="genome-info">
+                <span id="genomeCount">0 genomes</span>
+                <span id="genomeDiversity">Diversity: 0.00</span>
+                <span id="genomeGeneration">Gen 0</span>
+            </div>
+        </section>
+
+        <!-- Markov State Graph -->
+        <section class="panel mc-theme state-graph animate-in" style="animation-delay: 0.3s;">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title">
+                        <span class="icon">🕸️</span>
+                        Markov State-Space Network
+                    </div>
+                    <div class="panel-subtitle">Discovered states and transition probabilities</div>
+                </div>
+            </div>
+            <canvas class="graph-canvas" id="graphCanvas"></canvas>
+            <div class="graph-stats">
+                <span id="stateCount">0 states</span>
+                <span id="transitionCount">0 transitions</span>
+                <span id="observationCount">0 observations</span>
+            </div>
+        </section>
+
+        <!-- Decision Heatmaps -->
+        <section class="panel full-width animate-in" style="animation-delay: 0.4s;">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title">
+                        <span class="icon">🔥</span>
+                        Live Decision Heatmaps
+                    </div>
+                    <div class="panel-subtitle">How each algorithm evaluates board positions</div>
+                </div>
+            </div>
+            <div class="heatmaps-container">
+                <div class="heatmap-panel ga-theme">
+                    <canvas class="heatmap-canvas" id="gaHeatmap" width="100" height="200"></canvas>
+                    <div class="heatmap-label" style="color: var(--ga-primary);">GA Weight Evaluation</div>
+                </div>
+                <div class="heatmap-panel mc-theme">
+                    <canvas class="heatmap-canvas" id="mcHeatmap" width="100" height="200"></canvas>
+                    <div class="heatmap-label" style="color: var(--mc-primary);">MC Learned Rewards</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparative Metrics -->
+        <section class="panel full-width metrics-panel animate-in" style="animation-delay: 0.5s;">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span class="icon">📊</span>
+                    Comparative Metrics
+                </div>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-card ga-accent">
+                    <div class="metric-label">GA Games</div>
+                    <div class="metric-value ga" id="gaGames">0</div>
+                </div>
+                <div class="metric-card mc-accent">
+                    <div class="metric-label">MC Games</div>
+                    <div class="metric-value mc" id="mcGames">0</div>
+                </div>
+                <div class="metric-card ga-accent">
+                    <div class="metric-label">GA Best Fitness</div>
+                    <div class="metric-value ga" id="gaBestFitness">0</div>
+                </div>
+                <div class="metric-card mc-accent">
+                    <div class="metric-label">MC Avg Reward</div>
+                    <div class="metric-value mc" id="mcAvgReward">0</div>
+                </div>
+                <div class="metric-card ga-accent">
+                    <div class="metric-label">GA Lines/Game</div>
+                    <div class="metric-value ga" id="gaLinesPerGame">0</div>
+                </div>
+                <div class="metric-card mc-accent">
+                    <div class="metric-label">MC States Known</div>
+                    <div class="metric-value mc" id="mcStatesKnown">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Exploration Rate</div>
+                    <div class="metric-value explore" id="explorationRate">0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Learning Efficiency</div>
+                    <div class="metric-value" id="learningEfficiency">--</div>
+                    <div class="metric-delta" id="efficiencyDelta"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline Scrubber -->
+        <section class="panel full-width timeline-panel animate-in" style="animation-delay: 0.6s;">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span class="icon">🕐</span>
+                    Learning Timeline
+                </div>
+            </div>
+            <div class="timeline-container">
+                <div class="timeline-controls">
+                    <button class="timeline-btn" id="playPauseBtn" title="Play/Pause">▶</button>
+                    <button class="timeline-btn" id="resetBtn" title="Reset">⏮</button>
+                    <div class="timeline-scrubber" id="scrubber">
+                        <div class="timeline-progress" id="timelineProgress" style="width: 100%;">
+                            <div class="timeline-handle"></div>
+                        </div>
+                    </div>
+                    <div class="speed-controls">
+                        <button class="speed-btn" data-speed="0.5">0.5x</button>
+                        <button class="speed-btn active" data-speed="1">1x</button>
+                        <button class="speed-btn" data-speed="2">2x</button>
+                        <button class="speed-btn" data-speed="5">5x</button>
+                    </div>
+                </div>
+                <div class="timeline-markers">
+                    <span id="timelineStart">Start</span>
+                    <span id="timelineCurrent">Live</span>
+                    <span id="timelineEnd">Now</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        /* ═══════════════════════════════════════════════════════════════════
+           CONFIGURATION & CONSTANTS
+           ═══════════════════════════════════════════════════════════════════ */
+        const CONFIG = {
+            GA_KEY: 'tetris_ai_weights_v2_population',
+            MC_KEY: 'tetris_markov_chains_v2_human_learned',
+            POLL_INTERVAL: 300, // ms
+            ANIMATION_DURATION: 300, // ms for lerping
+            BOARD_WIDTH: 10,
+            BOARD_HEIGHT: 20,
+
+            // Colors
+            GA_COLOR: '#4ade80',
+            GA_COLOR_DARK: '#22c55e',
+            MC_COLOR: '#60a5fa',
+            MC_COLOR_DARK: '#3b82f6',
+            EXPLORE_COLOR: '#f59e0b',
+            POOR_COLOR: '#ef4444',
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════
+           STATE MANAGEMENT
+           ═══════════════════════════════════════════════════════════════════ */
+        const state = {
+            connected: false,
+            pollTimer: null,
+            animationFrame: null,
+            lastUpdate: 0,
+
+            // GA Data
+            ga: {
+                population: [],
+                history: [],
+                generation: 0,
+                bestFitness: 0,
+                avgFitness: 0,
+                diversity: 0,
+            },
+
+            // MC Data
+            mc: {
+                stateTransitions: new Map(),
+                stateCount: 0,
+                transitionCount: 0,
+                totalObservations: 0,
+                avgReward: 0,
+                humanGamesObserved: 0,
+            },
+
+            // Animation state
+            animated: {
+                gaBestFitness: 0,
+                gaAvgFitness: 0,
+                mcAvgReward: 0,
+                mcStateCount: 0,
+            },
+
+            // Timeline
+            timeline: {
+                playing: false,
+                position: 1, // 0-1
+                speed: 1,
+                historyIndex: -1, // -1 = live
+            },
+
+            // Particle systems for genome visualization
+            particles: [],
+
+            // Force-directed graph nodes
+            graphNodes: [],
+            graphEdges: [],
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════
+           UTILITY FUNCTIONS
+           ═══════════════════════════════════════════════════════════════════ */
+
+        // Smooth number interpolation (lerp)
+        function lerp(current, target, factor = 0.1) {
+            return current + (target - current) * factor;
+        }
+
+        // Easing functions
+        const easing = {
+            easeOutCubic: (t) => 1 - Math.pow(1 - t, 3),
+            easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+        };
+
+        // Format large numbers
+        function formatNumber(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return Math.round(n).toString();
+        }
+
+        // Simple 2D projection of 4D weights using PCA-lite
+        function projectWeightsTo2D(weights) {
+            // Use a simplified projection: component 1 = height+holes, component 2 = lines+bumpiness
+            const x = (weights.aggregateHeight || 0) * 0.6 + (weights.holes || 0) * 0.4;
+            const y = (weights.completeLines || 0) * 0.5 - (weights.bumpiness || 0) * 0.5;
+            return { x, y };
+        }
+
+        // Hash state string to position for graph visualization
+        function hashStateToPosition(stateStr, width, height) {
+            let hash = 0;
+            for (let i = 0; i < stateStr.length; i++) {
+                hash = ((hash << 5) - hash) + stateStr.charCodeAt(i);
+                hash = hash & hash;
+            }
+            const x = (Math.abs(hash % 1000) / 1000) * width * 0.8 + width * 0.1;
+            const y = (Math.abs((hash >> 10) % 1000) / 1000) * height * 0.8 + height * 0.1;
+            return { x, y };
+        }
+
+        // Calculate population diversity
+        function calculateDiversity(population) {
+            if (!population || population.length < 2) return 0;
+            let totalDist = 0, count = 0;
+            for (let i = 0; i < population.length; i++) {
+                for (let j = i + 1; j < population.length; j++) {
+                    const w1 = population[i].weights;
+                    const w2 = population[j].weights;
+                    if (!w1 || !w2) continue;
+                    const dist = Math.sqrt(
+                        Math.pow((w1.aggregateHeight || 0) - (w2.aggregateHeight || 0), 2) +
+                        Math.pow((w1.completeLines || 0) - (w2.completeLines || 0), 2) +
+                        Math.pow((w1.holes || 0) - (w2.holes || 0), 2) +
+                        Math.pow((w1.bumpiness || 0) - (w2.bumpiness || 0), 2)
+                    );
+                    totalDist += dist;
+                    count++;
+                }
+            }
+            return count > 0 ? totalDist / count : 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           DATA LOADING
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function loadGAData() {
+            try {
+                const stored = localStorage.getItem(CONFIG.GA_KEY);
+                if (!stored) return null;
+                return JSON.parse(stored);
+            } catch (e) {
+                console.warn('Error loading GA data:', e);
+                return null;
+            }
+        }
+
+        function loadMCData() {
+            try {
+                const stored = localStorage.getItem(CONFIG.MC_KEY);
+                if (!stored) return null;
+                const parsed = JSON.parse(stored);
+
+                // Reconstruct Maps
+                const result = {
+                    stateTransitions: new Map(),
+                    stateHistory: parsed.chains?.stateHistory || [],
+                    totalObservations: parsed.chains?.totalObservations || 0,
+                    humanPatterns: new Map(),
+                    humanGamesObserved: parsed.chains?.humanGamesObserved || 0,
+                };
+
+                if (parsed.chains?.stateTransitions) {
+                    for (const [stateKey, actions] of Object.entries(parsed.chains.stateTransitions)) {
+                        result.stateTransitions.set(stateKey, new Map(Object.entries(actions)));
+                    }
+                }
+
+                if (parsed.chains?.humanPatterns) {
+                    for (const [stateKey, actions] of Object.entries(parsed.chains.humanPatterns)) {
+                        result.humanPatterns.set(stateKey, new Map(Object.entries(actions)));
+                    }
+                }
+
+                return result;
+            } catch (e) {
+                console.warn('Error loading MC data:', e);
+                return null;
+            }
+        }
+
+        function updateStateFromData() {
+            // Load GA data
+            const gaData = loadGAData();
+            if (gaData) {
+                state.ga.population = gaData.population || [];
+                state.ga.history = gaData.history || [];
+                state.ga.generation = state.ga.history.length;
+
+                const evaluated = state.ga.population.filter(g => g.evaluated && g.fitness != null);
+                state.ga.bestFitness = evaluated.length > 0
+                    ? Math.max(...evaluated.map(g => g.fitness))
+                    : 0;
+                state.ga.avgFitness = evaluated.length > 0
+                    ? evaluated.reduce((s, g) => s + g.fitness, 0) / evaluated.length
+                    : 0;
+                state.ga.diversity = calculateDiversity(state.ga.population);
+
+                // Update particles for genome visualization
+                updateGenomeParticles();
+            }
+
+            // Load MC data
+            const mcData = loadMCData();
+            if (mcData) {
+                state.mc.stateTransitions = mcData.stateTransitions;
+                state.mc.stateCount = mcData.stateTransitions.size;
+                state.mc.totalObservations = mcData.totalObservations;
+                state.mc.humanGamesObserved = mcData.humanGamesObserved;
+
+                // Count transitions and calculate avg reward
+                let transitionCount = 0;
+                let totalReward = 0;
+                let rewardCount = 0;
+                for (const [, actionMap] of mcData.stateTransitions.entries()) {
+                    for (const [, data] of actionMap.entries()) {
+                        transitionCount++;
+                        if (data.count > 0) {
+                            totalReward += data.totalReward;
+                            rewardCount += data.count;
+                        }
+                    }
+                }
+                state.mc.transitionCount = transitionCount;
+                state.mc.avgReward = rewardCount > 0 ? totalReward / rewardCount : 0;
+
+                // Update graph nodes
+                updateGraphNodes();
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           PARTICLE SYSTEM FOR GENOME VISUALIZATION
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function updateGenomeParticles() {
+            const canvas = document.getElementById('genomeCanvas');
+            if (!canvas) return;
+
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const scale = Math.min(width, height) * 0.35;
+
+            // Create or update particles for each genome
+            const newParticles = [];
+
+            for (const genome of state.ga.population) {
+                const proj = projectWeightsTo2D(genome.weights);
+                const targetX = centerX + proj.x * scale;
+                const targetY = centerY - proj.y * scale;
+
+                // Find existing particle or create new one
+                let particle = state.particles.find(p => p.id === genome.id);
+                if (!particle) {
+                    particle = {
+                        id: genome.id,
+                        x: centerX + (Math.random() - 0.5) * 50,
+                        y: centerY + (Math.random() - 0.5) * 50,
+                        vx: 0,
+                        vy: 0,
+                        targetX,
+                        targetY,
+                        radius: 6,
+                        fitness: genome.fitness || 0,
+                        evaluated: genome.evaluated,
+                        age: 0,
+                        pulsePhase: Math.random() * Math.PI * 2,
+                    };
+                } else {
+                    particle.targetX = targetX;
+                    particle.targetY = targetY;
+                    particle.fitness = genome.fitness || 0;
+                    particle.evaluated = genome.evaluated;
+                }
+
+                newParticles.push(particle);
+            }
+
+            state.particles = newParticles;
+        }
+
+        function updateParticlePhysics(deltaTime) {
+            const dt = deltaTime / 1000;
+            const springStrength = 3;
+            const damping = 0.8;
+
+            for (const p of state.particles) {
+                // Spring force toward target
+                const dx = p.targetX - p.x;
+                const dy = p.targetY - p.y;
+
+                p.vx += dx * springStrength * dt;
+                p.vy += dy * springStrength * dt;
+
+                // Damping
+                p.vx *= Math.pow(damping, dt);
+                p.vy *= Math.pow(damping, dt);
+
+                // Update position
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Update age and pulse
+                p.age += dt;
+                p.pulsePhase += dt * 2;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           FORCE-DIRECTED GRAPH FOR MARKOV STATES
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function updateGraphNodes() {
+            const canvas = document.getElementById('graphCanvas');
+            if (!canvas) return;
+
+            const width = canvas.width;
+            const height = canvas.height;
+
+            const newNodes = [];
+            const newEdges = [];
+
+            // Create nodes for each state
+            let idx = 0;
+            for (const [stateKey, actionMap] of state.mc.stateTransitions.entries()) {
+                // Limit to prevent performance issues
+                if (idx > 100) break;
+
+                const pos = hashStateToPosition(stateKey, width, height);
+
+                let existingNode = state.graphNodes.find(n => n.id === stateKey);
+                if (!existingNode) {
+                    existingNode = {
+                        id: stateKey,
+                        x: pos.x,
+                        y: pos.y,
+                        vx: 0,
+                        vy: 0,
+                        targetX: pos.x,
+                        targetY: pos.y,
+                        radius: 4,
+                        visitCount: 0,
+                        avgReward: 0,
+                        opacity: 0,
+                    };
+                }
+
+                // Calculate visit count and avg reward
+                let visits = 0;
+                let totalReward = 0;
+                for (const [, data] of actionMap.entries()) {
+                    visits += data.count;
+                    totalReward += data.totalReward;
+                }
+
+                existingNode.visitCount = visits;
+                existingNode.avgReward = visits > 0 ? totalReward / visits : 0;
+                existingNode.radius = Math.min(4 + Math.log(visits + 1) * 2, 15);
+                existingNode.opacity = Math.min(existingNode.opacity + 0.1, 1);
+
+                newNodes.push(existingNode);
+                idx++;
+            }
+
+            // Create edges (sample for performance)
+            idx = 0;
+            for (const [stateKey, actionMap] of state.mc.stateTransitions.entries()) {
+                if (idx > 50) break;
+
+                const sourceNode = newNodes.find(n => n.id === stateKey);
+                if (!sourceNode) continue;
+
+                for (const [action, data] of actionMap.entries()) {
+                    if (newEdges.length > 100) break;
+
+                    // Parse action to find target state (approximate)
+                    const avgReward = data.count > 0 ? data.totalReward / data.count : 0;
+                    const probability = data.count / (state.mc.totalObservations || 1);
+
+                    newEdges.push({
+                        source: sourceNode,
+                        targetOffset: { x: (Math.random() - 0.5) * 60, y: (Math.random() - 0.5) * 60 },
+                        probability,
+                        reward: avgReward,
+                        opacity: Math.min(probability * 10, 0.8),
+                    });
+                }
+                idx++;
+            }
+
+            state.graphNodes = newNodes;
+            state.graphEdges = newEdges;
+        }
+
+        function updateGraphPhysics(deltaTime) {
+            const dt = deltaTime / 1000;
+            const repulsion = 500;
+            const damping = 0.9;
+
+            // Repulsion between nodes
+            for (let i = 0; i < state.graphNodes.length; i++) {
+                for (let j = i + 1; j < state.graphNodes.length; j++) {
+                    const a = state.graphNodes[i];
+                    const b = state.graphNodes[j];
+
+                    const dx = b.x - a.x;
+                    const dy = b.y - a.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    if (dist < 100) {
+                        const force = repulsion / (dist * dist);
+                        const fx = (dx / dist) * force * dt;
+                        const fy = (dy / dist) * force * dt;
+
+                        a.vx -= fx;
+                        a.vy -= fy;
+                        b.vx += fx;
+                        b.vy += fy;
+                    }
+                }
+            }
+
+            // Update positions and apply damping
+            for (const node of state.graphNodes) {
+                node.vx *= Math.pow(damping, dt);
+                node.vy *= Math.pow(damping, dt);
+
+                node.x += node.vx;
+                node.y += node.vy;
+
+                // Boundary constraints
+                const canvas = document.getElementById('graphCanvas');
+                if (canvas) {
+                    node.x = Math.max(20, Math.min(canvas.width - 20, node.x));
+                    node.y = Math.max(20, Math.min(canvas.height - 20, node.y));
+                }
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           CANVAS RENDERING
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function setupCanvases() {
+            const canvases = ['curvesCanvas', 'genomeCanvas', 'graphCanvas', 'gaHeatmap', 'mcHeatmap'];
+            for (const id of canvases) {
+                const canvas = document.getElementById(id);
+                if (canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = rect.width * dpr;
+                    canvas.height = rect.height * dpr;
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(dpr, dpr);
+                }
+            }
+        }
+
+        function drawLearningCurves() {
+            const canvas = document.getElementById('curvesCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            const padding = 50;
+
+            // Clear
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw background grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (height - 2 * padding) * (i / 5);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+
+            // GA Learning Curve (from history)
+            const gaHistory = state.ga.history;
+            if (gaHistory.length > 1) {
+                const maxFitness = Math.max(...gaHistory.map(h => h.bestFitness), 1);
+
+                // Draw glow effect
+                ctx.shadowColor = CONFIG.GA_COLOR;
+                ctx.shadowBlur = 15;
+                ctx.strokeStyle = CONFIG.GA_COLOR;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+
+                for (let i = 0; i < gaHistory.length; i++) {
+                    const x = padding + (width - 2 * padding) * (i / Math.max(gaHistory.length - 1, 1));
+                    const y = height - padding - (height - 2 * padding) * (gaHistory[i].bestFitness / maxFitness);
+
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Draw points at milestones
+                ctx.fillStyle = CONFIG.GA_COLOR;
+                for (let i = 0; i < gaHistory.length; i += Math.max(1, Math.floor(gaHistory.length / 10))) {
+                    const x = padding + (width - 2 * padding) * (i / Math.max(gaHistory.length - 1, 1));
+                    const y = height - padding - (height - 2 * padding) * (gaHistory[i].bestFitness / maxFitness);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // MC Learning Curve (simulated from observations)
+            const mcObs = state.mc.totalObservations;
+            if (mcObs > 0) {
+                ctx.shadowColor = CONFIG.MC_COLOR;
+                ctx.shadowBlur = 15;
+                ctx.strokeStyle = CONFIG.MC_COLOR;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+
+                // Simulate learning curve based on observations
+                const points = Math.min(50, mcObs);
+                for (let i = 0; i < points; i++) {
+                    const progress = i / (points - 1);
+                    const x = padding + (width - 2 * padding) * progress;
+                    // Learning curve: starts slow, accelerates, then plateaus
+                    const learnedRatio = 1 - Math.exp(-progress * 3);
+                    const y = height - padding - (height - 2 * padding) * learnedRatio * 0.7;
+
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw axes labels
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.font = '12px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time / Iterations', width / 2, height - 10);
+
+            ctx.save();
+            ctx.translate(15, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Performance', 0, 0);
+            ctx.restore();
+
+            // Draw "No Data" if empty
+            if (gaHistory.length === 0 && state.mc.totalObservations === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '16px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.fillText('Play some games to see learning curves!', width / 2, height / 2);
+            }
+        }
+
+        function drawGenomeSpace() {
+            const canvas = document.getElementById('genomeCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            // Clear
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw ambient gradient
+            const gradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, width / 2);
+            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.03)');
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw axes
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(width / 2, 20);
+            ctx.lineTo(width / 2, height - 20);
+            ctx.moveTo(20, height / 2);
+            ctx.lineTo(width - 20, height / 2);
+            ctx.stroke();
+
+            // Draw particles
+            const maxFitness = Math.max(...state.particles.map(p => p.fitness), 1);
+
+            for (const p of state.particles) {
+                const normalizedFitness = p.fitness / maxFitness;
+                const pulse = Math.sin(p.pulsePhase) * 0.2 + 1;
+                const radius = p.radius * (0.8 + normalizedFitness * 0.4) * pulse;
+
+                // Glow effect
+                ctx.shadowColor = CONFIG.GA_COLOR;
+                ctx.shadowBlur = 10 + normalizedFitness * 10;
+
+                // Color based on fitness
+                const hue = 120 + (1 - normalizedFitness) * 60; // Green to yellow
+                ctx.fillStyle = `hsla(${hue}, 70%, 60%, ${0.5 + normalizedFitness * 0.5})`;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // Draw ID for top performers
+                if (normalizedFitness > 0.8 && p.evaluated) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`#${p.id}`, p.x, p.y + radius + 12);
+                }
+            }
+
+            // Draw "No Data" if empty
+            if (state.particles.length === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '14px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.fillText('No population data yet', width / 2, height / 2);
+            }
+        }
+
+        function drawStateGraph() {
+            const canvas = document.getElementById('graphCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            // Clear
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw ambient gradient
+            const gradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, width / 2);
+            gradient.addColorStop(0, 'rgba(96, 165, 250, 0.03)');
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw edges
+            for (const edge of state.graphEdges) {
+                const source = edge.source;
+                const targetX = source.x + edge.targetOffset.x;
+                const targetY = source.y + edge.targetOffset.y;
+
+                // Color based on reward
+                const rewardNorm = Math.max(0, Math.min(1, (edge.reward + 100) / 200));
+                const hue = rewardNorm * 120; // Red to green
+
+                ctx.strokeStyle = `hsla(${hue}, 70%, 50%, ${edge.opacity * 0.5})`;
+                ctx.lineWidth = 1 + edge.probability * 5;
+
+                ctx.beginPath();
+                ctx.moveTo(source.x, source.y);
+                ctx.lineTo(targetX, targetY);
+                ctx.stroke();
+            }
+
+            // Draw nodes
+            for (const node of state.graphNodes) {
+                // Glow effect
+                ctx.shadowColor = CONFIG.MC_COLOR;
+                ctx.shadowBlur = 8;
+
+                // Color based on avg reward
+                const rewardNorm = Math.max(0, Math.min(1, (node.avgReward + 100) / 200));
+                const hue = 200 + rewardNorm * 40; // Blue range
+
+                ctx.fillStyle = `hsla(${hue}, 70%, 55%, ${node.opacity})`;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw "No Data" if empty
+            if (state.graphNodes.length === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '14px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.fillText('No Markov states discovered yet', width / 2, height / 2);
+            }
+        }
+
+        function drawHeatmaps() {
+            drawGAHeatmap();
+            drawMCHeatmap();
+        }
+
+        function drawGAHeatmap() {
+            const canvas = document.getElementById('gaHeatmap');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const cellW = canvas.width / CONFIG.BOARD_WIDTH;
+            const cellH = canvas.height / CONFIG.BOARD_HEIGHT;
+
+            // Clear
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // If we have a best genome, visualize its weights as a heatmap
+            const bestGenome = state.ga.population.find(g => g.evaluated && g.fitness === state.ga.bestFitness);
+            const weights = bestGenome?.weights || { aggregateHeight: -0.5, completeLines: 0.76, holes: -0.36, bumpiness: -0.18 };
+
+            // Create heatmap based on simulated evaluation
+            for (let y = 0; y < CONFIG.BOARD_HEIGHT; y++) {
+                for (let x = 0; x < CONFIG.BOARD_WIDTH; x++) {
+                    // Simulate "desirability" - lower rows are generally better for placing pieces
+                    const heightPenalty = (CONFIG.BOARD_HEIGHT - y) / CONFIG.BOARD_HEIGHT * Math.abs(weights.aggregateHeight);
+                    const centerBonus = (1 - Math.abs(x - CONFIG.BOARD_WIDTH / 2) / (CONFIG.BOARD_WIDTH / 2)) * 0.3;
+
+                    const score = centerBonus - heightPenalty;
+                    const normalized = (score + 1) / 2;
+
+                    const hue = normalized * 120; // Red to green
+                    const alpha = 0.3 + normalized * 0.4;
+
+                    ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${alpha})`;
+                    ctx.fillRect(x * cellW, y * cellH, cellW - 1, cellH - 1);
+                }
+            }
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x <= CONFIG.BOARD_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * cellW, 0);
+                ctx.lineTo(x * cellW, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= CONFIG.BOARD_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * cellH);
+                ctx.lineTo(canvas.width, y * cellH);
+                ctx.stroke();
+            }
+        }
+
+        function drawMCHeatmap() {
+            const canvas = document.getElementById('mcHeatmap');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const cellW = canvas.width / CONFIG.BOARD_WIDTH;
+            const cellH = canvas.height / CONFIG.BOARD_HEIGHT;
+
+            // Clear
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Analyze learned patterns to create heatmap
+            const positionRewards = {};
+
+            for (const [stateKey, actionMap] of state.mc.stateTransitions.entries()) {
+                for (const [action, data] of actionMap.entries()) {
+                    const [xStr] = action.split('_');
+                    const x = parseInt(xStr);
+                    if (!isNaN(x) && x >= 0 && x < CONFIG.BOARD_WIDTH) {
+                        if (!positionRewards[x]) positionRewards[x] = { total: 0, count: 0 };
+                        positionRewards[x].total += data.totalReward;
+                        positionRewards[x].count += data.count;
+                    }
+                }
+            }
+
+            // Draw heatmap
+            for (let y = 0; y < CONFIG.BOARD_HEIGHT; y++) {
+                for (let x = 0; x < CONFIG.BOARD_WIDTH; x++) {
+                    let score = 0;
+
+                    if (positionRewards[x] && positionRewards[x].count > 0) {
+                        const avgReward = positionRewards[x].total / positionRewards[x].count;
+                        score = (avgReward + 100) / 200; // Normalize
+                    } else {
+                        // Default pattern - prefer center
+                        score = 0.3 + (1 - Math.abs(x - CONFIG.BOARD_WIDTH / 2) / (CONFIG.BOARD_WIDTH / 2)) * 0.2;
+                    }
+
+                    // Reduce score for higher positions (less learned)
+                    score *= (0.5 + (y / CONFIG.BOARD_HEIGHT) * 0.5);
+
+                    const hue = 200 + score * 40; // Blue range
+                    const alpha = 0.2 + score * 0.5;
+
+                    ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${alpha})`;
+                    ctx.fillRect(x * cellW, y * cellH, cellW - 1, cellH - 1);
+                }
+            }
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x <= CONFIG.BOARD_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * cellW, 0);
+                ctx.lineTo(x * cellW, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= CONFIG.BOARD_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * cellH);
+                ctx.lineTo(canvas.width, y * cellH);
+                ctx.stroke();
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           UI UPDATES
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function updateMetrics() {
+            // Animate values
+            state.animated.gaBestFitness = lerp(state.animated.gaBestFitness, state.ga.bestFitness, 0.15);
+            state.animated.gaAvgFitness = lerp(state.animated.gaAvgFitness, state.ga.avgFitness, 0.15);
+            state.animated.mcAvgReward = lerp(state.animated.mcAvgReward, state.mc.avgReward, 0.15);
+            state.animated.mcStateCount = lerp(state.animated.mcStateCount, state.mc.stateCount, 0.15);
+
+            // Update DOM
+            const updates = {
+                'gaGames': state.ga.generation,
+                'mcGames': state.mc.humanGamesObserved,
+                'gaBestFitness': formatNumber(Math.round(state.animated.gaBestFitness)),
+                'mcAvgReward': state.animated.mcAvgReward.toFixed(1),
+                'gaLinesPerGame': state.ga.avgFitness > 0 ? Math.round(state.ga.avgFitness / 150) : 0,
+                'mcStatesKnown': formatNumber(Math.round(state.animated.mcStateCount)),
+                'explorationRate': Math.round((1 - Math.min(state.mc.stateCount / 100, 1)) * 100) + '%',
+                'genomeCount': state.ga.population.length + ' genomes',
+                'genomeDiversity': 'Diversity: ' + state.ga.diversity.toFixed(3),
+                'genomeGeneration': 'Gen ' + state.ga.generation,
+                'stateCount': state.mc.stateCount + ' states',
+                'transitionCount': state.mc.transitionCount + ' transitions',
+                'observationCount': formatNumber(state.mc.totalObservations) + ' observations',
+            };
+
+            for (const [id, value] of Object.entries(updates)) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value;
+            }
+
+            // Learning efficiency comparison
+            const gaEfficiency = state.ga.generation > 0 ? state.ga.bestFitness / state.ga.generation : 0;
+            const mcEfficiency = state.mc.totalObservations > 0 ? (state.mc.avgReward * state.mc.stateCount) / state.mc.totalObservations : 0;
+
+            const efficiencyEl = document.getElementById('learningEfficiency');
+            const deltaEl = document.getElementById('efficiencyDelta');
+
+            if (gaEfficiency > mcEfficiency * 1.2) {
+                efficiencyEl.textContent = 'GA Leading';
+                efficiencyEl.className = 'metric-value ga';
+                deltaEl.textContent = '+' + ((gaEfficiency / Math.max(mcEfficiency, 0.1) - 1) * 100).toFixed(0) + '%';
+                deltaEl.className = 'metric-delta positive';
+            } else if (mcEfficiency > gaEfficiency * 1.2) {
+                efficiencyEl.textContent = 'MC Leading';
+                efficiencyEl.className = 'metric-value mc';
+                deltaEl.textContent = '+' + ((mcEfficiency / Math.max(gaEfficiency, 0.1) - 1) * 100).toFixed(0) + '%';
+                deltaEl.className = 'metric-delta positive';
+            } else {
+                efficiencyEl.textContent = 'Balanced';
+                efficiencyEl.className = 'metric-value';
+                deltaEl.textContent = '~equal';
+                deltaEl.className = 'metric-delta';
+            }
+        }
+
+        function updateConnectionStatus() {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const btn = document.getElementById('connectBtn');
+
+            if (state.connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected • Polling';
+                btn.textContent = 'Disconnect';
+                btn.classList.add('active');
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Disconnected';
+                btn.textContent = 'Connect to Game';
+                btn.classList.remove('active');
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           MAIN ANIMATION LOOP
+           ═══════════════════════════════════════════════════════════════════ */
+
+        let lastFrameTime = 0;
+
+        function animate(timestamp) {
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+
+            // Update physics
+            updateParticlePhysics(deltaTime);
+            updateGraphPhysics(deltaTime);
+
+            // Draw all visualizations
+            drawLearningCurves();
+            drawGenomeSpace();
+            drawStateGraph();
+            drawHeatmaps();
+
+            // Update metrics
+            updateMetrics();
+
+            state.animationFrame = requestAnimationFrame(animate);
+        }
+
+        function startPolling() {
+            if (state.pollTimer) return;
+
+            state.connected = true;
+            updateConnectionStatus();
+
+            // Initial load
+            updateStateFromData();
+
+            // Poll for updates
+            state.pollTimer = setInterval(() => {
+                updateStateFromData();
+            }, CONFIG.POLL_INTERVAL);
+        }
+
+        function stopPolling() {
+            if (state.pollTimer) {
+                clearInterval(state.pollTimer);
+                state.pollTimer = null;
+            }
+            state.connected = false;
+            updateConnectionStatus();
+        }
+
+        function toggleConnection() {
+            if (state.connected) {
+                stopPolling();
+            } else {
+                startPolling();
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           TIMELINE CONTROLS
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function setupTimelineControls() {
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const scrubber = document.getElementById('scrubber');
+            const speedBtns = document.querySelectorAll('.speed-btn');
+
+            playPauseBtn?.addEventListener('click', () => {
+                state.timeline.playing = !state.timeline.playing;
+                playPauseBtn.textContent = state.timeline.playing ? '⏸' : '▶';
+                playPauseBtn.classList.toggle('active', state.timeline.playing);
+            });
+
+            resetBtn?.addEventListener('click', () => {
+                state.timeline.position = 0;
+                updateTimelineUI();
+            });
+
+            scrubber?.addEventListener('click', (e) => {
+                const rect = scrubber.getBoundingClientRect();
+                state.timeline.position = (e.clientX - rect.left) / rect.width;
+                updateTimelineUI();
+            });
+
+            speedBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    speedBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    state.timeline.speed = parseFloat(btn.dataset.speed);
+                });
+            });
+        }
+
+        function updateTimelineUI() {
+            const progress = document.getElementById('timelineProgress');
+            const current = document.getElementById('timelineCurrent');
+
+            if (progress) {
+                progress.style.width = (state.timeline.position * 100) + '%';
+            }
+
+            if (current) {
+                if (state.timeline.position >= 0.99) {
+                    current.textContent = 'Live';
+                } else {
+                    const genIdx = Math.floor(state.timeline.position * state.ga.history.length);
+                    current.textContent = `Gen ${genIdx}`;
+                }
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           INITIALIZATION
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function init() {
+            // Setup canvases
+            setupCanvases();
+
+            // Setup event listeners
+            document.getElementById('connectBtn')?.addEventListener('click', toggleConnection);
+
+            // Setup timeline
+            setupTimelineControls();
+
+            // Handle resize
+            window.addEventListener('resize', () => {
+                setupCanvases();
+            });
+
+            // Start animation loop
+            state.animationFrame = requestAnimationFrame(animate);
+
+            // Auto-connect if data exists
+            const hasGAData = localStorage.getItem(CONFIG.GA_KEY);
+            const hasMCData = localStorage.getItem(CONFIG.MC_KEY);
+
+            if (hasGAData || hasMCData) {
+                setTimeout(startPolling, 500);
+            }
+
+            console.log('🧪 Tetris AI Learning Visualization initialized');
+            console.log('💡 Click "Connect to Game" to start monitoring learning progress');
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
