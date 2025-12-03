@@ -1,4 +1,4 @@
-# Tetris AI Battle — Learning Without Backpropagation
+# Learning Without Backpropagation
 
 A multiplayer Tetris sandbox where **two gradient‑free learners** improve through play:
 
