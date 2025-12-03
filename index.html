@@ -680,8 +680,12 @@
             <div>Space: Hard Drop</div>
             <div>1-5: Power-ups</div>
             <div>Tab: Change Target</div>
+            <div>Esc: Menu</div>
         </div>
+        <button class="menuButton" onclick="returnToMenu()" style="margin-top: 15px; padding: 10px 25px; font-size: 16px;">Back to Menu</button>
     </div>
+
+    <button id="backToMenuBtn" onclick="returnToMenu()" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 100; padding: 10px 20px; font-size: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; border-radius: 20px; cursor: pointer;">Back to Menu</button>
 
     <script>
         // Game Constants
@@ -2667,12 +2671,14 @@
                         this.evolvePopulation();
                     }
                     saveAIWeights(this.gaState);
-                    const message = winner ? 
-                        (winner.isAI ? `CPU ${winner.id} Wins!` : 'You Win!') : 
+                    const message = winner ?
+                        (winner.isAI ? `CPU ${winner.id} Wins!` : 'You Win!') :
                         'Game Over!';
-                    
+
                     if (confirm(`${message}\n\nPlay again?`)) {
                         location.reload();
+                    } else {
+                        returnToMenu();
                     }
                 }, 1000);
             }
@@ -3239,9 +3245,11 @@
                 console.log('Starting game with', playerCount, 'players, AI type:', aiType);
                 document.getElementById('startMenu').style.display = 'none';
                 document.getElementById('gameContainer').style.display = 'flex';
-                // Hide controls in AI-vs-AI mode
-                document.querySelector('.controls').style.display = (aiType === 'versus') ? 'none' : 'block';
-                
+                // Hide controls in AI-vs-AI mode, show floating back button instead
+                const isAIvsAI = (aiType === 'versus');
+                document.querySelector('.controls').style.display = isAIvsAI ? 'none' : 'block';
+                document.getElementById('backToMenuBtn').style.display = isAIvsAI ? 'block' : 'none';
+
                 const powerUpsEnabled = document.getElementById('togglePowerUps') ? document.getElementById('togglePowerUps').checked : true;
                 game = new Game(playerCount, aiType, powerUpsEnabled);
                 game.init();
@@ -3252,8 +3260,30 @@
                 document.getElementById('startMenu').style.display = 'flex';
                 document.getElementById('gameContainer').style.display = 'none';
                 document.querySelector('.controls').style.display = 'none';
+                document.getElementById('backToMenuBtn').style.display = 'none';
             }
         }
+
+        function returnToMenu() {
+            // Stop the current game
+            if (game) {
+                game.running = false;
+                game = null;
+            }
+            // Hide game UI, show menu
+            document.getElementById('gameContainer').style.display = 'none';
+            document.getElementById('gameContainer').innerHTML = '';
+            document.querySelector('.controls').style.display = 'none';
+            document.getElementById('backToMenuBtn').style.display = 'none';
+            document.getElementById('startMenu').style.display = 'flex';
+        }
+
+        // Global Escape key handler
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && game) {
+                returnToMenu();
+            }
+        });
 
         // Generation comparison functions
         function showCompareGenerations() {
